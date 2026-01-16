@@ -64,37 +64,18 @@ export async function GET(request) {
       console.log('Found delivery boy:', deliveryBoy.name, 'ID:', deliveryBoy.id, 'Phone:', deliveryBoy.phone_number)
     }
 
-    // Step 2: Fetch orders assigned to this delivery boy
-    // WHERE clause: delivery_boy_id = deliveryBoy.id
+    // Step 2: Fetch deliveries assigned to this delivery boy
+    // WHERE clause: delivery_boy_phone = deliveryBoy.phone_number
     // This ensures delivery boy only sees their own deliveries
-    console.log('Fetching orders for delivery_boy_id:', deliveryBoy.id)
+    console.log('Fetching deliveries for phone number:', deliveryBoy.phone_number)
 
     let query = supabase
-      .from('orders')
+      .from('deliveries')
       .select(`
-        id,
-        delivery_date,
-        meal_slot,
-        order_status,
-        delivery_address,
-        special_instructions,
-        delivery_notes,
-        assigned_at,
-        delivered_at,
-        delivery_boy_id,
-        customer:customer_accounts!orders_customer_id_fkey(
-          name,
-          phone_number,
-          address
-        ),
-        menu_item:menu_items(
-          name,
-          description
-        )
+        *
       `)
-      .eq('delivery_boy_id', deliveryBoy.id) // IMPORTANT: Filter by delivery boy ID
+      .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by phone number
       .order('delivery_date', { ascending: true })
-      .order('meal_slot', { ascending: true })
 
     // Filter by date if provided
     if (date) {
@@ -107,24 +88,24 @@ export async function GET(request) {
       console.log('Showing deliveries from today onwards:', today)
     }
 
-    const { data: orders, error: ordersError } = await query
+    const { data: deliveries, error: deliveriesError } = await query
 
-    if (ordersError) {
-      console.error('Error fetching orders:', ordersError)
+    if (deliveriesError) {
+      console.error('Error fetching deliveries:', deliveriesError)
       return NextResponse.json(
         { success: false, error: 'Failed to fetch deliveries' },
         { status: 500 }
       )
     }
 
-    console.log(`Found ${orders?.length || 0} orders for delivery boy ${deliveryBoy.name}`)
+    console.log(`Found ${deliveries?.length || 0} deliveries for phone ${deliveryBoy.phone_number}`)
 
     // Calculate statistics
     const today = new Date().toISOString().split('T')[0]
-    const todayOrders = orders.filter(o => o.delivery_date === today)
-    const completed = todayOrders.filter(o => o.order_status === 'Delivered').length
-    const pending = todayOrders.filter(o =>
-      o.order_status !== 'Delivered' && o.order_status !== 'Cancelled'
+    const todayDeliveries = deliveries.filter(d => d.delivery_date === today)
+    const completed = todayDeliveries.filter(d => d.status === 'Delivered' || d.status === 'delivered').length
+    const pending = todayDeliveries.filter(d =>
+      d.status !== 'Delivered' && d.status !== 'delivered' && d.status !== 'Cancelled'
     ).length
 
     // Get monthly stats
@@ -132,21 +113,21 @@ export async function GET(request) {
     firstDayOfMonth.setDate(1)
     const monthStart = firstDayOfMonth.toISOString().split('T')[0]
 
-    const { data: monthlyOrders } = await supabase
-      .from('orders')
+    const { data: monthlyDeliveries } = await supabase
+      .from('deliveries')
       .select('id', { count: 'exact', head: false })
-      .eq('delivery_boy_id', deliveryBoy.id)
-      .eq('order_status', 'Delivered')
+      .eq('delivery_boy_phone', deliveryBoy.phone_number)
+      .in('status', ['Delivered', 'delivered'])
       .gte('delivery_date', monthStart)
 
     return NextResponse.json({
       success: true,
-      deliveries: orders,
+      deliveries: deliveries,
       stats: {
-        todayTotal: todayOrders.length,
+        todayTotal: todayDeliveries.length,
         todayCompleted: completed,
         todayPending: pending,
-        monthlyTotal: monthlyOrders?.length || 0
+        monthlyTotal: monthlyDeliveries?.length || 0
       }
     })
 

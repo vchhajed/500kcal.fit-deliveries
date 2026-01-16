@@ -69,23 +69,23 @@ export async function POST(request) {
       deliveryBoy = dbUser
     }
 
-    // Verify the order is assigned to this delivery boy
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, delivery_boy_id, order_status')
+    // Verify the delivery is assigned to this delivery boy
+    const { data: delivery, error: deliveryError } = await supabase
+      .from('deliveries')
+      .select('id, delivery_boy_phone, status')
       .eq('id', orderId)
       .single()
 
-    if (orderError || !order) {
+    if (deliveryError || !delivery) {
       return NextResponse.json(
-        { success: false, error: 'Order not found' },
+        { success: false, error: 'Delivery not found' },
         { status: 404 }
       )
     }
 
-    if (order.delivery_boy_id !== deliveryBoy.id) {
+    if (delivery.delivery_boy_phone !== deliveryBoy.phone_number) {
       return NextResponse.json(
-        { success: false, error: 'Order not assigned to you' },
+        { success: false, error: 'Delivery not assigned to you' },
         { status: 403 }
       )
     }
@@ -120,9 +120,9 @@ export async function POST(request) {
 
     const photoUrl = urlData.publicUrl
 
-    // Update order with photo URL
+    // Update delivery with photo URL
     const { error: updateError } = await supabase
-      .from('orders')
+      .from('deliveries')
       .update({
         delivery_photo_url: photoUrl,
         updated_at: new Date().toISOString()
@@ -130,9 +130,9 @@ export async function POST(request) {
       .eq('id', orderId)
 
     if (updateError) {
-      console.error('Error updating order:', updateError)
+      console.error('Error updating delivery:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update order with photo' },
+        { success: false, error: 'Failed to update delivery with photo' },
         { status: 500 }
       )
     }

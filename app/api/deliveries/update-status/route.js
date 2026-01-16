@@ -74,30 +74,30 @@ export async function POST(request) {
       deliveryBoy = dbUser
     }
 
-    // Verify the order is assigned to this delivery boy
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, delivery_boy_id, order_status')
+    // Verify the delivery is assigned to this delivery boy
+    const { data: delivery, error: deliveryError } = await supabase
+      .from('deliveries')
+      .select('id, delivery_boy_phone, status')
       .eq('id', orderId)
       .single()
 
-    if (orderError || !order) {
+    if (deliveryError || !delivery) {
       return NextResponse.json(
-        { success: false, error: 'Order not found' },
+        { success: false, error: 'Delivery not found' },
         { status: 404 }
       )
     }
 
-    if (order.delivery_boy_id !== deliveryBoy.id) {
+    if (delivery.delivery_boy_phone !== deliveryBoy.phone_number) {
       return NextResponse.json(
-        { success: false, error: 'Order not assigned to you' },
+        { success: false, error: 'Delivery not assigned to you' },
         { status: 403 }
       )
     }
 
     // Prepare update data
     const updateData = {
-      order_status: status,
+      status: status,
       updated_at: new Date().toISOString()
     }
 
@@ -109,26 +109,26 @@ export async function POST(request) {
       updateData.delivered_at = new Date().toISOString()
     }
 
-    // Update the order
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
+    // Update the delivery
+    const { data: updatedDelivery, error: updateError } = await supabase
+      .from('deliveries')
       .update(updateData)
       .eq('id', orderId)
       .select()
       .single()
 
     if (updateError) {
-      console.error('Error updating order:', updateError)
+      console.error('Error updating delivery:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update order status' },
+        { success: false, error: 'Failed to update delivery status' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      message: `Order marked as ${status}`,
-      order: updatedOrder
+      message: `Delivery marked as ${status}`,
+      delivery: updatedDelivery
     })
 
   } catch (error) {
