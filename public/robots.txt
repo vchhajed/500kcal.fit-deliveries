@@ -1,0 +1,11 @@
+# Robots.txt for 500kcal.fit Delivery Portal
+
+User-agent: *
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+
+# Allow public pages
+Allow: /
