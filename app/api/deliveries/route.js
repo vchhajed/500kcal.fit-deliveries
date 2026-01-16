@@ -72,7 +72,12 @@ export async function GET(request) {
     let query = supabase
       .from('deliveries')
       .select(`
-        *
+        *,
+        customer:customer_accounts!deliveries_customer_id_fkey(
+          name,
+          phone_number,
+          address
+        )
       `)
       .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by phone number
       .order('delivery_date', { ascending: true })
