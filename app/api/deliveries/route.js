@@ -23,45 +23,52 @@ export async function GET(request) {
       )
     }
 
-    // Check if hardcoded user (stored in localStorage as deliveryId)
+    // Step 1: Get delivery boy details by phone number
     const deliveryId = searchParams.get('id')
     let deliveryBoy = null
 
     if (deliveryId && HARDCODED_USER_IDS.includes(deliveryId)) {
-      // Hardcoded user - skip database check
+      // Hardcoded user - for testing only
       deliveryBoy = {
         id: deliveryId,
         name: deliveryId === 'hardcoded-user-1' ? 'Test Delivery Boy 1' : 'Test Delivery Boy 2',
-        role: 'delivery_boy'
+        role: 'delivery_boy',
+        phone_number: deliveryId === 'hardcoded-user-1' ? '8087406269' : '9730425526'
       }
-      console.log('Using hardcoded user:', deliveryBoy.name)
+      console.log('Using hardcoded user:', deliveryBoy.name, 'Phone:', deliveryBoy.phone_number)
     } else {
-      // Verify session from database
+      // Fetch delivery boy from database by phone number
       const { data: dbUser, error: authError } = await supabase
         .from('customer_accounts')
-        .select('id, name, role')
+        .select('id, name, role, phone_number')
         .eq('phone_number', phone)
         .eq('session_token', sessionToken)
         .single()
 
       if (authError || !dbUser) {
+        console.error('Auth error:', authError)
         return NextResponse.json(
-          { success: false, error: 'Invalid session' },
+          { success: false, error: 'Invalid session. Please login again.' },
           { status: 401 }
         )
       }
 
       if (dbUser.role !== 'delivery_boy') {
         return NextResponse.json(
-          { success: false, error: 'Access denied' },
+          { success: false, error: 'Access denied. This portal is for delivery personnel only.' },
           { status: 403 }
         )
       }
 
       deliveryBoy = dbUser
+      console.log('Found delivery boy:', deliveryBoy.name, 'ID:', deliveryBoy.id, 'Phone:', deliveryBoy.phone_number)
     }
 
-    // Build query
+    // Step 2: Fetch orders assigned to this delivery boy
+    // WHERE clause: delivery_boy_id = deliveryBoy.id
+    // This ensures delivery boy only sees their own deliveries
+    console.log('Fetching orders for delivery_boy_id:', deliveryBoy.id)
+
     let query = supabase
       .from('orders')
       .select(`
@@ -74,6 +81,7 @@ export async function GET(request) {
         delivery_notes,
         assigned_at,
         delivered_at,
+        delivery_boy_id,
         customer:customer_accounts!orders_customer_id_fkey(
           name,
           phone_number,
@@ -84,17 +92,19 @@ export async function GET(request) {
           description
         )
       `)
-      .eq('delivery_boy_id', deliveryBoy.id)
+      .eq('delivery_boy_id', deliveryBoy.id) // IMPORTANT: Filter by delivery boy ID
       .order('delivery_date', { ascending: true })
       .order('meal_slot', { ascending: true })
 
     // Filter by date if provided
     if (date) {
       query = query.eq('delivery_date', date)
+      console.log('Filtering by date:', date)
     } else {
       // Default: show today's and future deliveries
       const today = new Date().toISOString().split('T')[0]
       query = query.gte('delivery_date', today)
+      console.log('Showing deliveries from today onwards:', today)
     }
 
     const { data: orders, error: ordersError } = await query
@@ -106,6 +116,8 @@ export async function GET(request) {
         { status: 500 }
       )
     }
+
+    console.log(`Found ${orders?.length || 0} orders for delivery boy ${deliveryBoy.name}`)
 
     // Calculate statistics
     const today = new Date().toISOString().split('T')[0]
