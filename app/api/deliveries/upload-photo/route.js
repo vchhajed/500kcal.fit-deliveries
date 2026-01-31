@@ -17,6 +17,9 @@ export async function POST(request) {
     const orderId = formData.get('orderId')
     const photo = formData.get('photo')
     const id = formData.get('id')
+    const latitude = formData.get('latitude')
+    const longitude = formData.get('longitude')
+    const accuracy = formData.get('accuracy')
 
     if (!phone || !session) {
       return NextResponse.json(
@@ -34,20 +37,22 @@ export async function POST(request) {
 
     // Check if hardcoded user
     let deliveryBoy = null
+    let deliveryBoyPhone = phone
 
     if (id && HARDCODED_USER_IDS.includes(id)) {
       // Hardcoded user - skip authentication
       deliveryBoy = {
         id: id,
         name: id === 'hardcoded-user-1' ? 'Test Delivery Boy 1' : 'Test Delivery Boy 2',
-        role: 'delivery_boy'
+        role: 'delivery_boy',
+        phone_number: phone // Add phone_number to hardcoded user object
       }
       console.log('Hardcoded user uploading photo:', deliveryBoy.name)
     } else {
       // Verify session from database
       const { data: dbUser, error: authError } = await supabase
         .from('customer_accounts')
-        .select('id, name, role')
+        .select('id, name, role, phone_number')
         .eq('phone_number', phone)
         .eq('session_token', session)
         .single()
@@ -67,25 +72,26 @@ export async function POST(request) {
       }
 
       deliveryBoy = dbUser
+      deliveryBoyPhone = dbUser.phone_number
     }
 
-    // Verify the delivery is assigned to this delivery boy
-    const { data: delivery, error: deliveryError } = await supabase
-      .from('deliveries')
-      .select('id, delivery_boy_phone, status')
+    // Verify the order is assigned to this delivery boy
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('id, delivery_boy_phone, order_status')
       .eq('id', orderId)
       .single()
 
-    if (deliveryError || !delivery) {
+    if (orderError || !order) {
       return NextResponse.json(
-        { success: false, error: 'Delivery not found' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    if (delivery.delivery_boy_phone !== deliveryBoy.phone_number) {
+    if (order.delivery_boy_phone !== deliveryBoyPhone) {
       return NextResponse.json(
-        { success: false, error: 'Delivery not assigned to you' },
+        { success: false, error: 'Order not assigned to you' },
         { status: 403 }
       )
     }
@@ -98,7 +104,7 @@ export async function POST(request) {
     const arrayBuffer = await photo.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('delivery-photos')
       .upload(filePath, buffer, {
         contentType: photo.type,
@@ -120,19 +126,31 @@ export async function POST(request) {
 
     const photoUrl = urlData.publicUrl
 
-    // Update delivery with photo URL
+    // Update order with photo URL and location
+    const updateData = {
+      delivery_photo_url: photoUrl,
+      updated_at: new Date().toISOString()
+    }
+
+    // Add location data if provided
+    if (latitude && longitude) {
+      updateData.delivery_latitude = parseFloat(latitude)
+      updateData.delivery_longitude = parseFloat(longitude)
+      if (accuracy) {
+        updateData.delivery_location_accuracy = parseFloat(accuracy)
+      }
+      console.log('Saving delivery location:', { latitude, longitude, accuracy })
+    }
+
     const { error: updateError } = await supabase
-      .from('deliveries')
-      .update({
-        delivery_photo_url: photoUrl,
-        updated_at: new Date().toISOString()
-      })
+      .from('orders')
+      .update(updateData)
       .eq('id', orderId)
 
     if (updateError) {
-      console.error('Error updating delivery:', updateError)
+      console.error('Error updating order:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update delivery with photo' },
+        { success: false, error: 'Failed to update order with photo' },
         { status: 500 }
       )
     }

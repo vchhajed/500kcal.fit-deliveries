@@ -64,22 +64,22 @@ export async function GET(request) {
       console.log('Found delivery boy:', deliveryBoy.name, 'ID:', deliveryBoy.id, 'Phone:', deliveryBoy.phone_number)
     }
 
-    // Step 2: Fetch deliveries assigned to this delivery boy
+    // Step 2: Fetch orders assigned to this delivery boy
     // WHERE clause: delivery_boy_phone = deliveryBoy.phone_number
-    // This ensures delivery boy only sees their own deliveries
-    console.log('Fetching deliveries for phone number:', deliveryBoy.phone_number)
+    // This ensures delivery boy only sees their own orders
+    console.log('Fetching orders for delivery boy phone:', deliveryBoy.phone_number)
 
     let query = supabase
-      .from('deliveries')
+      .from('orders')
       .select(`
         *,
-        customer:customer_accounts!deliveries_customer_id_fkey(
+        customer:customer_accounts!orders_customer_id_fkey(
           name,
           phone_number,
           address
         )
       `)
-      .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by phone number
+      .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by delivery boy phone
       .order('delivery_date', { ascending: true })
 
     // Filter by date if provided
@@ -103,14 +103,14 @@ export async function GET(request) {
       )
     }
 
-    console.log(`Found ${deliveries?.length || 0} deliveries for phone ${deliveryBoy.phone_number}`)
+    console.log(`Found ${deliveries?.length || 0} orders for delivery boy phone ${deliveryBoy.phone_number}`)
 
     // Calculate statistics
     const today = new Date().toISOString().split('T')[0]
     const todayDeliveries = deliveries.filter(d => d.delivery_date === today)
-    const completed = todayDeliveries.filter(d => d.status === 'Delivered' || d.status === 'delivered').length
+    const completed = todayDeliveries.filter(d => d.order_status === 'Delivered').length
     const pending = todayDeliveries.filter(d =>
-      d.status !== 'Delivered' && d.status !== 'delivered' && d.status !== 'Cancelled'
+      d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
     ).length
 
     // Get monthly stats
@@ -119,10 +119,10 @@ export async function GET(request) {
     const monthStart = firstDayOfMonth.toISOString().split('T')[0]
 
     const { data: monthlyDeliveries } = await supabase
-      .from('deliveries')
+      .from('orders')
       .select('id', { count: 'exact', head: false })
       .eq('delivery_boy_phone', deliveryBoy.phone_number)
-      .in('status', ['Delivered', 'delivered'])
+      .eq('order_status', 'Delivered')
       .gte('delivery_date', monthStart)
 
     return NextResponse.json({

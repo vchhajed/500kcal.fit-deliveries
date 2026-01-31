@@ -39,20 +39,22 @@ export async function POST(request) {
 
     // Check if hardcoded user
     let deliveryBoy = null
+    let deliveryBoyPhone = phone
 
     if (id && HARDCODED_USER_IDS.includes(id)) {
       // Hardcoded user - skip authentication
       deliveryBoy = {
         id: id,
         name: id === 'hardcoded-user-1' ? 'Test Delivery Boy 1' : 'Test Delivery Boy 2',
-        role: 'delivery_boy'
+        role: 'delivery_boy',
+        phone_number: phone // Add phone_number to hardcoded user object
       }
       console.log('Hardcoded user updating order:', deliveryBoy.name)
     } else {
       // Verify session from database
       const { data: dbUser, error: authError } = await supabase
         .from('customer_accounts')
-        .select('id, name, role')
+        .select('id, name, role, phone_number')
         .eq('phone_number', phone)
         .eq('session_token', session)
         .single()
@@ -72,32 +74,33 @@ export async function POST(request) {
       }
 
       deliveryBoy = dbUser
+      deliveryBoyPhone = dbUser.phone_number
     }
 
-    // Verify the delivery is assigned to this delivery boy
-    const { data: delivery, error: deliveryError } = await supabase
-      .from('deliveries')
-      .select('id, delivery_boy_phone, status')
+    // Verify the order is assigned to this delivery boy
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('id, delivery_boy_phone, order_status')
       .eq('id', orderId)
       .single()
 
-    if (deliveryError || !delivery) {
+    if (orderError || !order) {
       return NextResponse.json(
-        { success: false, error: 'Delivery not found' },
+        { success: false, error: 'Order not found' },
         { status: 404 }
       )
     }
 
-    if (delivery.delivery_boy_phone !== deliveryBoy.phone_number) {
+    if (order.delivery_boy_phone !== deliveryBoyPhone) {
       return NextResponse.json(
-        { success: false, error: 'Delivery not assigned to you' },
+        { success: false, error: 'Order not assigned to you' },
         { status: 403 }
       )
     }
 
     // Prepare update data
     const updateData = {
-      status: status,
+      order_status: status,
       updated_at: new Date().toISOString()
     }
 
@@ -109,26 +112,26 @@ export async function POST(request) {
       updateData.delivered_at = new Date().toISOString()
     }
 
-    // Update the delivery
-    const { data: updatedDelivery, error: updateError } = await supabase
-      .from('deliveries')
+    // Update the order
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
       .update(updateData)
       .eq('id', orderId)
       .select()
       .single()
 
     if (updateError) {
-      console.error('Error updating delivery:', updateError)
+      console.error('Error updating order:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update delivery status' },
+        { success: false, error: 'Failed to update order status' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      message: `Delivery marked as ${status}`,
-      delivery: updatedDelivery
+      message: `Order marked as ${status}`,
+      order: updatedOrder
     })
 
   } catch (error) {

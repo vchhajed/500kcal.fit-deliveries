@@ -24,6 +24,7 @@ BEGIN
 
       -- Delivery boy assignment
       delivery_boy_id UUID REFERENCES public.customer_accounts(id) ON DELETE SET NULL,
+      delivery_boy_phone TEXT,
       assigned_at TIMESTAMP WITH TIME ZONE,
 
       -- Order status
@@ -34,6 +35,10 @@ BEGIN
       delivery_notes TEXT,
       delivered_at TIMESTAMP WITH TIME ZONE,
       delivery_photo_url TEXT,
+      delivery_latitude DECIMAL(10, 8),
+      delivery_longitude DECIMAL(11, 8),
+      delivery_location_accuracy DECIMAL(10, 2),
+      delivery_address_verified TEXT,
 
       -- Timestamps
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -43,18 +48,25 @@ BEGIN
     -- Create indexes for better query performance
     CREATE INDEX idx_orders_customer_id ON public.orders(customer_id);
     CREATE INDEX idx_orders_delivery_boy_id ON public.orders(delivery_boy_id);
+    CREATE INDEX idx_orders_delivery_boy_phone ON public.orders(delivery_boy_phone);
     CREATE INDEX idx_orders_delivery_date ON public.orders(delivery_date);
     CREATE INDEX idx_orders_order_status ON public.orders(order_status);
     CREATE INDEX idx_orders_meal_slot ON public.orders(meal_slot);
 
     -- Create composite index for common queries
     CREATE INDEX idx_orders_delivery_boy_date ON public.orders(delivery_boy_id, delivery_date);
+    CREATE INDEX idx_orders_delivery_boy_phone_date ON public.orders(delivery_boy_phone, delivery_date);
 
     -- Add comments for documentation
     COMMENT ON TABLE public.orders IS 'Orders table for meal deliveries';
     COMMENT ON COLUMN public.orders.delivery_boy_id IS 'UUID of delivery boy assigned to this order';
+    COMMENT ON COLUMN public.orders.delivery_boy_phone IS 'Phone number of delivery boy assigned to this order';
     COMMENT ON COLUMN public.orders.order_status IS 'Current status of the order';
     COMMENT ON COLUMN public.orders.delivery_photo_url IS 'URL to photo proof of delivery';
+    COMMENT ON COLUMN public.orders.delivery_latitude IS 'GPS latitude where order was delivered';
+    COMMENT ON COLUMN public.orders.delivery_longitude IS 'GPS longitude where order was delivered';
+    COMMENT ON COLUMN public.orders.delivery_location_accuracy IS 'GPS accuracy in meters';
+    COMMENT ON COLUMN public.orders.delivery_address_verified IS 'Reverse geocoded address at delivery location';
 
     RAISE NOTICE 'Orders table created successfully';
 

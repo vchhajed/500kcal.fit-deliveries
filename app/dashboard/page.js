@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [photoModalOpen, setPhotoModalOpen] = useState(false)
   const [selectedOrderForPhoto, setSelectedOrderForPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [location, setLocation] = useState(null)
+  const [locationError, setLocationError] = useState(null)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -173,6 +175,39 @@ export default function DashboardPage() {
       const session = localStorage.getItem('deliverySession')
       const id = localStorage.getItem('deliveryId')
 
+      // Get current location
+      let currentLocation = location
+      if (!currentLocation) {
+        try {
+          currentLocation = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error('Geolocation not supported'))
+              return
+            }
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                resolve({
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude,
+                  accuracy: position.coords.accuracy
+                })
+              },
+              (error) => {
+                console.warn('Location access denied:', error)
+                resolve(null) // Continue without location
+              },
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            )
+          })
+          if (currentLocation) {
+            setLocation(currentLocation)
+          }
+        } catch (err) {
+          console.warn('Could not get location:', err)
+          // Continue without location
+        }
+      }
+
       // Upload photo
       const formData = new FormData()
       formData.append('phone', phone)
@@ -181,6 +216,16 @@ export default function DashboardPage() {
       formData.append('photo', file)
       if (id) {
         formData.append('id', id) // Include user ID for hardcoded users
+      }
+
+      // Add location data if available
+      if (currentLocation) {
+        formData.append('latitude', currentLocation.latitude.toString())
+        formData.append('longitude', currentLocation.longitude.toString())
+        formData.append('accuracy', currentLocation.accuracy.toString())
+        console.log('Uploading with location:', currentLocation)
+      } else {
+        console.warn('Uploading without location data')
       }
 
       const uploadResponse = await fetch('/api/deliveries/upload-photo', {
@@ -205,6 +250,7 @@ export default function DashboardPage() {
           session,
           orderId: selectedOrderForPhoto,
           status: 'Delivered',
+          id, // Include user ID for hardcoded users
         }),
       })
 
@@ -229,10 +275,43 @@ export default function DashboardPage() {
     setPhotoModalOpen(false)
     setSelectedOrderForPhoto(null)
     setPhotoPreview(null)
+    setLocation(null)
+    setLocationError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
+
+  // Request location when modal opens
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Location not supported')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        })
+        setLocationError(null)
+      },
+      (error) => {
+        console.error('Location error:', error)
+        setLocationError('Location access denied')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
+  // Auto-request location when photo modal opens
+  useEffect(() => {
+    if (photoModalOpen) {
+      requestLocation()
+    }
+  }, [photoModalOpen])
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
@@ -434,6 +513,22 @@ export default function DashboardPage() {
                             </a>
                           </div>
                         )}
+                        {delivery.delivery_latitude && delivery.delivery_longitude && (
+                          <div className={styles.detailRow}>
+                            <span className={styles.detailLabel}>📍 Delivered At:</span>
+                            <a
+                              href={`https://www.google.com/maps?q=${delivery.delivery_latitude},${delivery.delivery_longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.locationLink}
+                            >
+                              View on Map
+                              {delivery.delivery_location_accuracy && (
+                                <span className={styles.accuracy}> (±{Math.round(delivery.delivery_location_accuracy)}m)</span>
+                              )}
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       {/* Status Badge */}
@@ -483,6 +578,23 @@ export default function DashboardPage() {
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <h2>📸 Upload Delivery Photo</h2>
             <p className={styles.modalSubtitle}>Take a photo as proof of delivery</p>
+
+            {/* Location Status */}
+            <div className={styles.locationStatus}>
+              {location ? (
+                <p className={styles.locationSuccess}>
+                  📍 Location captured (±{Math.round(location.accuracy)}m)
+                </p>
+              ) : locationError ? (
+                <p className={styles.locationWarning}>
+                  ⚠️ Location not available - Photo will be uploaded without GPS data
+                </p>
+              ) : (
+                <p className={styles.locationPending}>
+                  🔍 Getting location...
+                </p>
+              )}
+            </div>
 
             <div className={styles.photoUploadSection}>
               <input
