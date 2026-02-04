@@ -57,8 +57,21 @@ export default function DashboardPage() {
         url += `&date=${date}`
       }
 
+      console.log('=== DEBUG: Fetching deliveries ===')
+      console.log('Phone:', phoneParam)
+      console.log('Session:', sessionParam)
+      console.log('ID:', idParam)
+      console.log('Date:', date)
+      console.log('URL:', url)
+
       const response = await fetch(url)
       const data = await response.json()
+
+      console.log('=== DEBUG: Response received ===')
+      console.log('Success:', data.success)
+      console.log('Deliveries count:', data.deliveries?.length || 0)
+      console.log('Stats:', data.stats)
+      console.log('Full response:', data)
 
       if (data.success) {
         setDeliveries(data.deliveries || [])
