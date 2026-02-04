@@ -200,6 +200,24 @@
   font-size: 22px;
 }
 
+.slotSection {
+  margin-bottom: 30px;
+}
+
+.slotSection:last-child {
+  margin-bottom: 0;
+}
+
+.slotHeader {
+  margin: 0 0 15px 0;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 18px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
 .emptyState {
   text-align: center;
   padding: 60px 20px;

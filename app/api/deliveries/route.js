@@ -77,10 +77,19 @@ export async function GET(request) {
           name,
           phone_number,
           address
+        ),
+        menu_item:menu_items!orders_menu_item_id_fkey(
+          name,
+          description,
+          calories,
+          protein,
+          carbs,
+          fat
         )
       `)
       .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by delivery boy phone
       .order('delivery_date', { ascending: true })
+      .order('meal_slot', { ascending: true })
 
     // Filter by date if provided
     if (date) {
