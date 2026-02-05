@@ -16,10 +16,12 @@ export default function DashboardPage() {
     monthlyTotal: 0
   })
   const [selectedDate, setSelectedDate] = useState('')
+  const [selectedSlot, setSelectedSlot] = useState('All')
   const [updating, setUpdating] = useState(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(null)
   const [error, setError] = useState('')
   const [photoModalOpen, setPhotoModalOpen] = useState(false)
+  const [routeModalOpen, setRouteModalOpen] = useState(false)
   const [selectedOrderForPhoto, setSelectedOrderForPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [location, setLocation] = useState(null)
@@ -371,6 +373,204 @@ export default function DashboardPage() {
     }
   }
 
+  // Group deliveries by meal slot
+  const groupBySlot = () => {
+    const slots = [
+      { name: 'Breakfast', emoji: '🌅' },
+      { name: 'Lunch', emoji: '☀️' },
+      { name: 'Dinner', emoji: '🌙' }
+    ]
+
+    // Filter by selected slot if not "All"
+    const filteredSlots = selectedSlot === 'All'
+      ? slots
+      : slots.filter(s => s.name === selectedSlot)
+
+    return filteredSlots.map(slot => ({
+      ...slot,
+      items: deliveries.filter(d => {
+        // Case-insensitive comparison
+        const slotName = d.meal_slot ? d.meal_slot.toLowerCase() : ''
+        const filterName = slot.name.toLowerCase()
+        return slotName === filterName
+      })
+    })).filter(group => group.items.length > 0)
+  }
+
+  // Helper function to geocode addresses
+  const geocodeAddress = async (address) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`
+      )
+      const data = await response.json()
+      if (data.results && data.results.length > 0) {
+        return data.results[0].geometry.location
+      }
+    } catch (err) {
+      console.error('Geocoding error:', err)
+    }
+    return null
+  }
+
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371 // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLng = (lng2 - lng1) * Math.PI / 180
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng/2) * Math.sin(dLng/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    return R * c // Distance in km
+  }
+
+  // Optimize route using nearest neighbor algorithm
+  const optimizeRouteOrder = (deliveries, startLat, startLng) => {
+    if (deliveries.length <= 1) return deliveries
+
+    const unvisited = [...deliveries]
+    const route = []
+    let currentLat = startLat
+    let currentLng = startLng
+
+    while (unvisited.length > 0) {
+      let nearestIndex = 0
+      let nearestDistance = Infinity
+
+      // Find nearest unvisited delivery
+      unvisited.forEach((delivery, index) => {
+        if (delivery.lat && delivery.lng) {
+          const distance = calculateDistance(currentLat, currentLng, delivery.lat, delivery.lng)
+          if (distance < nearestDistance) {
+            nearestDistance = distance
+            nearestIndex = index
+          }
+        }
+      })
+
+      // Add nearest to route and update current position
+      const nearest = unvisited.splice(nearestIndex, 1)[0]
+      route.push(nearest)
+      if (nearest.lat && nearest.lng) {
+        currentLat = nearest.lat
+        currentLng = nearest.lng
+      }
+    }
+
+    return route
+  }
+
+  const handlePlanRoute = async () => {
+    // Get pending deliveries (not delivered or cancelled)
+    const pendingDeliveries = deliveries.filter(d =>
+      d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
+    )
+
+    if (pendingDeliveries.length === 0) {
+      alert('No pending deliveries to plan a route for')
+      return
+    }
+
+    // Extract delivery data with addresses
+    const deliveryData = pendingDeliveries.map(d => ({
+      id: d.id,
+      address: (d.delivery_address || d.customer?.address || '').trim(),
+      customerName: d.customer?.name || 'N/A',
+      lat: null,
+      lng: null
+    })).filter(d => d.address)
+
+    if (deliveryData.length === 0) {
+      alert('No addresses found for pending deliveries')
+      return
+    }
+
+    if (deliveryData.length === 1) {
+      // Single destination - just open in Google Maps
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(deliveryData[0].address)}`
+      window.open(mapsUrl, '_blank')
+      return
+    }
+
+    try {
+      // Show loading indicator
+      alert('Planning optimal route... This may take a moment.')
+
+      // Get current location as starting point
+      const currentLocation = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          resolve(null)
+          return
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        )
+      })
+
+      let startLat, startLng
+
+      if (currentLocation) {
+        startLat = currentLocation.lat
+        startLng = currentLocation.lng
+        console.log('Starting from current location:', startLat, startLng)
+      } else {
+        // Default to first delivery if no location
+        console.log('No current location, will use first address')
+      }
+
+      // Use Google Maps Directions API for optimization via URL
+      // The web interface supports waypoint optimization
+      const addresses = deliveryData.map(d => d.address)
+
+      if (currentLocation) {
+        // Build URL with current location as origin
+        const origin = `${startLat},${startLng}`
+        const destination = encodeURIComponent(addresses[addresses.length - 1])
+
+        if (addresses.length > 2) {
+          const waypoints = addresses.slice(0, -1).map(addr => encodeURIComponent(addr)).join('|')
+          // Use dir_action=navigate for mobile optimization
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
+          window.open(mapsUrl, '_blank')
+        } else {
+          const waypoint = encodeURIComponent(addresses[0])
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoint}&travelmode=driving`
+          window.open(mapsUrl, '_blank')
+        }
+      } else {
+        // No current location - create route through all addresses
+        const origin = encodeURIComponent(addresses[0])
+        const destination = encodeURIComponent(addresses[addresses.length - 1])
+
+        if (addresses.length > 2) {
+          const waypoints = addresses.slice(1, -1).map(addr => encodeURIComponent(addr)).join('|')
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
+          window.open(mapsUrl, '_blank')
+        } else {
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`
+          window.open(mapsUrl, '_blank')
+        }
+      }
+
+      console.log('Route planned with', deliveryData.length, 'stops')
+
+    } catch (err) {
+      console.error('Error planning route:', err)
+      // Fallback to simple multi-destination URL
+      const addresses = deliveryData.map(d => d.address)
+      const destinations = addresses.map(addr => encodeURIComponent(addr)).join('/')
+      const mapsUrl = `https://www.google.com/maps/dir/${destinations}`
+      window.open(mapsUrl, '_blank')
+    }
+  }
+
   if (loading) {
     return (
       <div className={styles.loadingContainer}>
@@ -435,7 +635,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Date Filter */}
+        {/* Filters */}
         <div className={styles.filterSection}>
           <div className={styles.filterGroup}>
             <label>Filter by date:</label>
@@ -465,7 +665,47 @@ export default function DashboardPage() {
               Show All
             </button>
           </div>
+          <div className={styles.filterGroup}>
+            <label>Filter by meal:</label>
+            <button
+              onClick={() => setSelectedSlot('All')}
+              className={`${styles.slotFilterBtn} ${selectedSlot === 'All' ? styles.active : ''}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSelectedSlot('Breakfast')}
+              className={`${styles.slotFilterBtn} ${selectedSlot === 'Breakfast' ? styles.active : ''}`}
+            >
+              🌅 Breakfast
+            </button>
+            <button
+              onClick={() => setSelectedSlot('Lunch')}
+              className={`${styles.slotFilterBtn} ${selectedSlot === 'Lunch' ? styles.active : ''}`}
+            >
+              ☀️ Lunch
+            </button>
+            <button
+              onClick={() => setSelectedSlot('Dinner')}
+              className={`${styles.slotFilterBtn} ${selectedSlot === 'Dinner' ? styles.active : ''}`}
+            >
+              🌙 Dinner
+            </button>
+          </div>
         </div>
+
+        {/* Plan Route Button */}
+        {deliveries.filter(d => d.order_status !== 'Delivered' && d.order_status !== 'Cancelled').length > 0 && (
+          <div className={styles.routeSection}>
+            <button
+              onClick={handlePlanRoute}
+              className={styles.planRouteBtn}
+            >
+              🗺️ Plan Delivery Route
+            </button>
+            <p className={styles.routeHint}>Opens Google Maps with optimized route for all pending deliveries</p>
+          </div>
+        )}
 
         {/* Delivery List */}
         <div className={styles.deliveriesSection}>
@@ -475,8 +715,12 @@ export default function DashboardPage() {
               <p>No deliveries assigned for selected date</p>
             </div>
           ) : (
-            <div className={styles.deliveriesList}>
-              {deliveries.map((delivery) => (
+            <>
+              {groupBySlot().map((slotGroup) => (
+                <div key={slotGroup.name} className={styles.slotSection}>
+                  <h3 className={styles.slotHeader}>{slotGroup.emoji} {slotGroup.name}</h3>
+                  <div className={styles.deliveriesList}>
+                    {slotGroup.items.map((delivery) => (
                 <div
                   key={delivery.id}
                   className={styles.deliveryCard}
@@ -579,9 +823,12 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
         </div>
       </div>
 

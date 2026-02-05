@@ -78,13 +78,8 @@ export async function GET(request) {
           phone_number,
           address
         ),
-        menu_item:menu_items!orders_menu_item_id_fkey(
-          name,
-          description,
-          calories,
-          protein,
-          carbs,
-          fat
+        menu_item:recipes(
+          name
         )
       `)
       .eq('delivery_boy_phone', deliveryBoy.phone_number) // IMPORTANT: Filter by delivery boy phone
