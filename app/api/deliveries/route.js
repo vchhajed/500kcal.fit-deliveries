@@ -68,10 +68,10 @@ export async function GET(request) {
       query = query.eq('delivery_date', date)
       console.log('Filtering by date:', date)
     } else {
-      // Default: show today's and future deliveries
+      // Default: show only today's deliveries
       const today = new Date().toISOString().split('T')[0]
-      query = query.gte('delivery_date', today)
-      console.log('Showing deliveries from today onwards:', today)
+      query = query.eq('delivery_date', today)
+      console.log('Showing only today\'s deliveries:', today)
     }
 
     const { data: deliveries, error: deliveriesError } = await query
