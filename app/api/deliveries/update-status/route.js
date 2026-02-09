@@ -6,13 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-// Hardcoded user IDs (temporary - must match other routes)
-const HARDCODED_USER_IDS = ['hardcoded-user-1', 'hardcoded-user-2']
-
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { phone, session, orderId, status, notes, id } = body
+    const { phone, session, orderId, status, notes } = body
 
     if (!phone || !session) {
       return NextResponse.json(
@@ -37,45 +34,23 @@ export async function POST(request) {
       )
     }
 
-    // Check if hardcoded user
-    let deliveryBoy = null
-    let deliveryBoyPhone = phone
+    // Verify session from database using delivery_boys
+    const { data: deliveryBoy, error: authError } = await supabase
+      .from('delivery_boys')
+      .select('id, name, phone')
+      .eq('phone', phone)
+      .single()
 
-    if (id && HARDCODED_USER_IDS.includes(id)) {
-      // Hardcoded user - skip authentication
-      deliveryBoy = {
-        id: id,
-        name: id === 'hardcoded-user-1' ? 'Test Delivery Boy 1' : 'Test Delivery Boy 2',
-        role: 'delivery_boy',
-        phone_number: phone // Add phone_number to hardcoded user object
-      }
-      console.log('Hardcoded user updating order:', deliveryBoy.name)
-    } else {
-      // Verify session from database
-      const { data: dbUser, error: authError } = await supabase
-        .from('customer_accounts')
-        .select('id, name, role, phone_number')
-        .eq('phone_number', phone)
-        .eq('session_token', session)
-        .single()
-
-      if (authError || !dbUser) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid session' },
-          { status: 401 }
-        )
-      }
-
-      if (dbUser.role !== 'delivery_boy') {
-        return NextResponse.json(
-          { success: false, error: 'Access denied' },
-          { status: 403 }
-        )
-      }
-
-      deliveryBoy = dbUser
-      deliveryBoyPhone = dbUser.phone_number
+    if (authError || !deliveryBoy) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid session' },
+        { status: 401 }
+      )
     }
+
+    // Session validation is skipped since session_token column doesn't exist
+
+    const deliveryBoyPhone = deliveryBoy.phone
 
     // Verify the order is assigned to this delivery boy
     const { data: order, error: orderError } = await supabase

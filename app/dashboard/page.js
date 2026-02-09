@@ -49,12 +49,8 @@ export default function DashboardPage() {
     try {
       const phoneParam = phone || localStorage.getItem('deliveryPhone')
       const sessionParam = session || localStorage.getItem('deliverySession')
-      const idParam = localStorage.getItem('deliveryId')
 
       let url = `/api/deliveries?phone=${phoneParam}&session=${sessionParam}`
-      if (idParam) {
-        url += `&id=${idParam}`
-      }
       if (date) {
         url += `&date=${date}`
       }
@@ -62,7 +58,6 @@ export default function DashboardPage() {
       console.log('=== DEBUG: Fetching deliveries ===')
       console.log('Phone:', phoneParam)
       console.log('Session:', sessionParam)
-      console.log('ID:', idParam)
       console.log('Date:', date)
       console.log('URL:', url)
 
@@ -116,7 +111,6 @@ export default function DashboardPage() {
 
       const phone = localStorage.getItem('deliveryPhone')
       const session = localStorage.getItem('deliverySession')
-      const id = localStorage.getItem('deliveryId')
 
       const response = await fetch('/api/deliveries/update-status', {
         method: 'POST',
@@ -128,7 +122,6 @@ export default function DashboardPage() {
           session,
           orderId,
           status: newStatus,
-          id, // Include user ID for hardcoded users
         }),
       })
 
@@ -188,7 +181,6 @@ export default function DashboardPage() {
 
       const phone = localStorage.getItem('deliveryPhone')
       const session = localStorage.getItem('deliverySession')
-      const id = localStorage.getItem('deliveryId')
 
       // Get current location
       let currentLocation = location
@@ -229,9 +221,6 @@ export default function DashboardPage() {
       formData.append('session', session)
       formData.append('orderId', selectedOrderForPhoto)
       formData.append('photo', file)
-      if (id) {
-        formData.append('id', id) // Include user ID for hardcoded users
-      }
 
       // Add location data if available
       if (currentLocation) {
@@ -265,7 +254,6 @@ export default function DashboardPage() {
           session,
           orderId: selectedOrderForPhoto,
           status: 'Delivered',
-          id, // Include user ID for hardcoded users
         }),
       })
 
@@ -397,79 +385,23 @@ export default function DashboardPage() {
     })).filter(group => group.items.length > 0)
   }
 
-  // Helper function to geocode addresses
-  const geocodeAddress = async (address) => {
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=YOUR_API_KEY`
-      )
-      const data = await response.json()
-      if (data.results && data.results.length > 0) {
-        return data.results[0].geometry.location
-      }
-    } catch (err) {
-      console.error('Geocoding error:', err)
-    }
-    return null
-  }
-
-  // Calculate distance between two points using Haversine formula
-  const calculateDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371 // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLng = (lng2 - lng1) * Math.PI / 180
-    const a =
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLng/2) * Math.sin(dLng/2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-    return R * c // Distance in km
-  }
-
-  // Optimize route using nearest neighbor algorithm
-  const optimizeRouteOrder = (deliveries, startLat, startLng) => {
-    if (deliveries.length <= 1) return deliveries
-
-    const unvisited = [...deliveries]
-    const route = []
-    let currentLat = startLat
-    let currentLng = startLng
-
-    while (unvisited.length > 0) {
-      let nearestIndex = 0
-      let nearestDistance = Infinity
-
-      // Find nearest unvisited delivery
-      unvisited.forEach((delivery, index) => {
-        if (delivery.lat && delivery.lng) {
-          const distance = calculateDistance(currentLat, currentLng, delivery.lat, delivery.lng)
-          if (distance < nearestDistance) {
-            nearestDistance = distance
-            nearestIndex = index
-          }
-        }
-      })
-
-      // Add nearest to route and update current position
-      const nearest = unvisited.splice(nearestIndex, 1)[0]
-      route.push(nearest)
-      if (nearest.lat && nearest.lng) {
-        currentLat = nearest.lat
-        currentLng = nearest.lng
-      }
-    }
-
-    return route
-  }
-
   const handlePlanRoute = async () => {
     // Get pending deliveries (not delivered or cancelled)
-    const pendingDeliveries = deliveries.filter(d =>
+    let pendingDeliveries = deliveries.filter(d =>
       d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
     )
 
+    // Filter by selected meal slot if not "All" (case-insensitive)
+    if (selectedSlot !== 'All') {
+      pendingDeliveries = pendingDeliveries.filter(d => {
+        const slotName = d.meal_slot ? d.meal_slot.toLowerCase() : ''
+        return slotName === selectedSlot.toLowerCase()
+      })
+    }
+
     if (pendingDeliveries.length === 0) {
-      alert('No pending deliveries to plan a route for')
+      const slotMsg = selectedSlot !== 'All' ? ` for ${selectedSlot}` : ''
+      alert(`No pending deliveries to plan a route for${slotMsg}`)
       return
     }
 
@@ -530,13 +462,13 @@ export default function DashboardPage() {
       const addresses = deliveryData.map(d => d.address)
 
       if (currentLocation) {
-        // Build URL with current location as origin
+        // Build URL with current location as origin and waypoint optimization
         const origin = `${startLat},${startLng}`
         const destination = encodeURIComponent(addresses[addresses.length - 1])
 
         if (addresses.length > 2) {
-          const waypoints = addresses.slice(0, -1).map(addr => encodeURIComponent(addr)).join('|')
-          // Use dir_action=navigate for mobile optimization
+          // Add optimize:true to enable waypoint optimization for shortest route
+          const waypoints = 'optimize:true|' + addresses.slice(0, -1).map(addr => encodeURIComponent(addr)).join('|')
           const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
           window.open(mapsUrl, '_blank')
         } else {
@@ -545,12 +477,13 @@ export default function DashboardPage() {
           window.open(mapsUrl, '_blank')
         }
       } else {
-        // No current location - create route through all addresses
+        // No current location - create route through all addresses with optimization
         const origin = encodeURIComponent(addresses[0])
         const destination = encodeURIComponent(addresses[addresses.length - 1])
 
         if (addresses.length > 2) {
-          const waypoints = addresses.slice(1, -1).map(addr => encodeURIComponent(addr)).join('|')
+          // Add optimize:true to enable waypoint optimization for shortest route
+          const waypoints = 'optimize:true|' + addresses.slice(1, -1).map(addr => encodeURIComponent(addr)).join('|')
           const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
           window.open(mapsUrl, '_blank')
         } else {
@@ -701,9 +634,11 @@ export default function DashboardPage() {
               onClick={handlePlanRoute}
               className={styles.planRouteBtn}
             >
-              🗺️ Plan Delivery Route
+              🗺️ Plan {selectedSlot !== 'All' ? selectedSlot : 'Delivery'} Route
             </button>
-            <p className={styles.routeHint}>Opens Google Maps with optimized route for all pending deliveries</p>
+            <p className={styles.routeHint}>
+              Opens Google Maps with shortest optimized route for {selectedSlot !== 'All' ? `${selectedSlot.toLowerCase()} ` : ''}pending deliveries
+            </p>
           </div>
         )}
 
