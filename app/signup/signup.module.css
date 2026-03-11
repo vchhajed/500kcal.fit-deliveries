@@ -8,177 +8,320 @@
 
 .signupCard {
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   padding: 40px;
   width: 100%;
-  max-width: 450px;
+  max-width: 460px;
   animation: slideIn 0.3s ease-out;
 }
 
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
+/* Logo */
 .logo {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 28px;
 }
-
 .logo h1 {
-  font-size: 32px;
-  margin-bottom: 5px;
+  font-size: 30px;
+  margin: 0 0 6px 0;
   color: #667eea;
 }
-
 .logo p {
-  color: #7f8c8d;
-  font-size: 16px;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form h2 {
-  text-align: center;
-  color: #2c3e50;
-  margin-bottom: 5px;
-  font-size: 24px;
-}
-
-.subtitle {
-  text-align: center;
-  color: #7f8c8d;
-  font-size: 14px;
-  margin: -10px 0 10px 0;
-}
-
-.inputGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.inputGroup label {
-  font-weight: 600;
-  color: #2c3e50;
-  font-size: 14px;
-}
-
-.inputGroup input {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 10px;
-  font-size: 16px;
-  transition: all 0.2s;
-}
-
-.inputGroup input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.inputGroup input:disabled {
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-}
-
-.primaryBtn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 14px;
-  border: none;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  margin-top: 10px;
-}
-
-.primaryBtn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-}
-
-.primaryBtn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.primaryBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.secondaryBtn {
-  background: white;
-  color: #667eea;
-  padding: 12px;
-  border: 2px solid #667eea;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.secondaryBtn:hover:not(:disabled) {
-  background: #f8f9ff;
-}
-
-.secondaryBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.error {
-  background-color: #fee;
-  color: #c00;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 14px;
-  text-align: center;
-  border: 1px solid #fcc;
-}
-
-.footer {
-  margin-top: 10px;
-  text-align: center;
-}
-
-.footer p {
   color: #7f8c8d;
   font-size: 14px;
   margin: 0;
 }
 
-.footer a {
-  color: #667eea;
-  text-decoration: none;
-  font-weight: 600;
+
+/* Form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.form h2 {
+  text-align: center;
+  color: #2c3e50;
+  margin: 0;
+  font-size: 22px;
+}
+.subtitle {
+  text-align: center;
+  color: #7f8c8d;
+  font-size: 13px;
+  margin: -8px 0 4px 0;
 }
 
-.footer a:hover {
-  text-decoration: underline;
+/* Inputs */
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.inputGroup label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 13px;
+}
+.inputGroup input,
+.phoneInput input,
+.passwordInput input {
+  padding: 13px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.inputGroup input:focus,
+.phoneInput input:focus,
+.passwordInput input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+.inputGroup input:disabled,
+.phoneInput input:disabled,
+.passwordInput input:disabled {
+  background: #f8f8f8;
+  cursor: not-allowed;
+}
+
+/* Phone with country code */
+.phoneInput {
+  display: flex;
+  align-items: center;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.phoneInput:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+.phoneInput input {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  flex: 1;
+}
+.countryCode {
+  padding: 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  background: #f5f5f5;
+  border-right: 2px solid #e0e0e0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Password with toggle */
+.passwordInput {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.passwordInput input {
+  padding-right: 46px;
+}
+.togglePassword {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+/* Password strength */
+.strengthBar {
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.strengthFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s, background 0.3s;
+}
+.strengthLabel {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+.mismatch {
+  font-size: 12px;
+  color: #e74c3c;
+  margin: 0;
+}
+
+
+/* Buttons */
+.primaryBtn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.primaryBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+.primaryBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.skipBtn {
+  background: none;
+  border: none;
+  color: #7f8c8d;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px;
+  width: 100%;
+  text-align: center;
+  transition: color 0.2s;
+}
+.skipBtn:hover { color: #667eea; }
+
+/* Error */
+.error {
+  background: #fff0f0;
+  color: #c0392b;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  border-left: 4px solid #e74c3c;
+}
+
+/* Footer link */
+.footerLink {
+  text-align: center;
+  color: #95a5a6;
+  font-size: 13px;
+  margin: 4px 0 0 0;
+}
+.footerLink a {
+  color: #667eea;
+  font-weight: 600;
+  text-decoration: none;
+}
+.footerLink a:hover { text-decoration: underline; }
+
+/* Welcome / Done step */
+.welcomeCard {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.welcomeIcon {
+  font-size: 56px;
+  animation: bounce 0.6s ease;
+}
+@keyframes bounce {
+  0%   { transform: scale(0.5); opacity: 0; }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.welcomeCard h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #2c3e50;
+}
+.welcomeText {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin: 0;
+}
+
+.nextSteps {
+  background: #f8f9ff;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.nextStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.nextStepNum {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.nextStep strong {
+  display: block;
+  color: #2c3e50;
+  font-size: 14px;
+}
+.nextStep p {
+  margin: 2px 0 0 0;
+  color: #7f8c8d;
+  font-size: 12px;
 }
 
 @media (max-width: 480px) {
   .signupCard {
-    padding: 30px 25px;
+    padding: 30px 22px;
   }
-
-  .logo h1 {
-    font-size: 28px;
+  .otpBox {
+    width: 42px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .stepLabel {
+    display: none;
   }
 }

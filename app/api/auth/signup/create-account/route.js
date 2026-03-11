@@ -36,62 +36,53 @@ export async function POST(request) {
       )
     }
 
-    // Check if phone number already exists
-    const { data: existingUser } = await supabase
-      .from('customer_accounts')
+    // Check if phone already exists in delivery_boys (the active auth table)
+    const { data: existing } = await supabase
+      .from('delivery_boys')
       .select('id')
-      .eq('phone_number', phone)
+      .eq('phone', phone)
       .single()
 
-    if (existingUser) {
+    if (existing) {
       return NextResponse.json(
         { success: false, error: 'Phone number already registered' },
         { status: 400 }
       )
     }
 
-    // Generate salt and hash password
     const salt = crypto.randomBytes(16).toString('hex')
     const passwordHash = hashPassword(password, salt)
     const sessionToken = crypto.randomBytes(32).toString('hex')
 
-    // Create account with delivery_boy role
-    const { data: newUser, error: createError } = await supabase
-      .from('customer_accounts')
+    // Insert into delivery_boys — the table used by login + all delivery APIs
+    const { data: newBoy, error: insertError } = await supabase
+      .from('delivery_boys')
       .insert({
-        phone_number: phone,
         name,
+        phone,
         password_hash: passwordHash,
         password_salt: salt,
-        role: 'delivery_boy',
         session_token: sessionToken,
       })
-      .select()
+      .select('id, name, phone')
       .single()
 
-    if (createError) {
-      console.error('Error creating account:', createError)
+    if (insertError) {
+      console.error('Error creating delivery boy account:', insertError)
       return NextResponse.json(
         { success: false, error: 'Failed to create account' },
         { status: 500 }
       )
     }
 
-    // Also add to user_roles table
-    await supabase
-      .from('user_roles')
-      .insert({
-        phone_number: phone,
-        name,
-        role: 'delivery_boy',
-      })
+    console.log('New delivery boy registered:', newBoy.name, newBoy.phone)
 
     return NextResponse.json({
       success: true,
       sessionToken,
-      id: newUser.id,
-      name: newUser.name,
-      phone: newUser.phone_number
+      id: newBoy.id,
+      name: newBoy.name,
+      phone: newBoy.phone,
     })
 
   } catch (error) {

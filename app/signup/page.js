@@ -1,359 +1,197 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { RecaptchaVerifier, signInWithPhoneNumber, PhoneAuthProvider, signInWithCredential } from 'firebase/auth'
-import { auth } from '../../lib/firebase'
 import styles from './signup.module.css'
 
 export default function SignupPage() {
   const router = useRouter()
-  const [step, setStep] = useState(1) // 1: phone, 2: OTP, 3: create password
-  const [phone, setPhone] = useState('')
+  const [step, setStep] = useState(1) // 1: details, 2: welcome
   const [name, setName] = useState('')
-  const [otp, setOtp] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [verificationId, setVerificationId] = useState(null)
 
-  useEffect(() => {
-    // Cleanup on unmount
-    return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear()
-        window.recaptchaVerifier = null
-      }
-    }
-  }, [])
-
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      try {
-        console.log('Setting up reCAPTCHA verifier...')
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-          callback: (response) => {
-            console.log('reCAPTCHA solved:', response)
-          },
-          'expired-callback': () => {
-            console.log('reCAPTCHA expired - clearing verifier')
-            if (window.recaptchaVerifier) {
-              try {
-                window.recaptchaVerifier.clear()
-              } catch (e) {
-                console.error('Error clearing expired reCAPTCHA:', e)
-              }
-              window.recaptchaVerifier = null
-            }
-          },
-          'error-callback': (error) => {
-            console.error('reCAPTCHA error callback:', error)
-            setError('reCAPTCHA verification failed. Please refresh the page.')
-          }
-        })
-
-        console.log('reCAPTCHA verifier created successfully')
-      } catch (error) {
-        console.error('Error setting up reCAPTCHA:', error)
-        setError('Failed to initialize reCAPTCHA. Please refresh the page.')
-      }
-    } else {
-      console.log('reCAPTCHA verifier already exists')
-    }
-  }
-
-  const handleSendOTP = async (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault()
     setError('')
 
-    try {
-      if (!name.trim()) {
-        setError('Please enter your name')
-        return
-      }
+    if (!name.trim()) { setError('Please enter your full name'); return }
+    if (phone.length !== 10) { setError('Please enter a valid 10-digit phone number'); return }
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return }
 
-      if (phone.length !== 10) {
-        setError('Please enter a valid 10-digit phone number')
-        return
-      }
-
-      setLoading(true)
-
-      // Setup reCAPTCHA if not already setup
-      if (!window.recaptchaVerifier) {
-        console.log('Initializing reCAPTCHA...')
-        setupRecaptcha()
-      }
-
-      const appVerifier = window.recaptchaVerifier
-
-      if (!appVerifier) {
-        throw new Error('Failed to initialize reCAPTCHA. Please refresh the page.')
-      }
-
-      const phoneNumber = `+91${phone}`
-      console.log('Sending OTP to:', phoneNumber)
-
-      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier)
-      console.log('OTP sent successfully!')
-
-      setVerificationId(confirmationResult)
-      setStep(2)
-      setError('')
-    } catch (err) {
-      console.error('Error sending OTP:', err)
-      console.error('Error code:', err.code)
-      console.error('Error message:', err.message)
-
-      let errorMessage = 'Failed to send OTP. Please try again.'
-
-      if (err.code === 'auth/invalid-app-credential') {
-        errorMessage = 'Firebase Phone Authentication is not enabled. Please enable it in Firebase Console.'
-      } else if (err.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many requests. Please try again later.'
-      } else if (err.code === 'auth/invalid-phone-number') {
-        errorMessage = 'Invalid phone number format.'
-      } else if (err.code === 'auth/quota-exceeded') {
-        errorMessage = 'SMS quota exceeded. Please try again later.'
-      }
-
-      setError(errorMessage)
-
-      // Clear reCAPTCHA on error
-      if (window.recaptchaVerifier) {
-        try {
-          window.recaptchaVerifier.clear()
-        } catch (e) {
-          console.error('Error clearing reCAPTCHA:', e)
-        }
-        window.recaptchaVerifier = null
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault()
-    setError('')
     setLoading(true)
-
     try {
-      if (otp.length !== 6) {
-        setError('Please enter a valid 6-digit OTP')
-        setLoading(false)
-        return
-      }
-
-      // Verify OTP with Firebase
-      const credential = PhoneAuthProvider.credential(verificationId.verificationId, otp)
-      await signInWithCredential(auth, credential)
-      console.log('OTP verified successfully')
-
-      // OTP verified successfully, move to password creation
-      setStep(3)
-      setError('')
-    } catch (err) {
-      console.error('Error verifying OTP:', err)
-      setError('Invalid OTP. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCreateAccount = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters')
-        setLoading(false)
-        return
-      }
-
-      if (password !== confirmPassword) {
-        setError('Passwords do not match')
-        setLoading(false)
-        return
-      }
-
-      // Create account in database
-      const response = await fetch('/api/auth/signup/create-account', {
+      const res = await fetch('/api/auth/signup/create-account', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone,
-          name,
-          password,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, name, password }),
       })
-
-      const data = await response.json()
+      const data = await res.json()
 
       if (data.success) {
-        // Store session data
         localStorage.setItem('deliverySession', data.sessionToken)
-        localStorage.setItem('deliveryPhone', phone)
-        localStorage.setItem('deliveryName', name)
+        localStorage.setItem('deliveryPhone', data.phone)
+        localStorage.setItem('deliveryName', data.name)
         localStorage.setItem('deliveryId', data.id)
-
-        // Redirect to dashboard
-        alert('Account created successfully!')
-        router.push('/dashboard')
+        setStep(2)
       } else {
         setError(data.error || 'Failed to create account')
       }
-    } catch (err) {
-      console.error('Error creating account:', err)
-      setError('Failed to create account. Please try again.')
+    } catch {
+      setError('Failed to connect to server. Please try again.')
     } finally {
       setLoading(false)
     }
   }
+
+  const passwordStrength = () => {
+    if (!password) return null
+    if (password.length < 6) return { label: 'Too short', color: '#e74c3c', width: '25%' }
+    if (password.length < 8) return { label: 'Weak', color: '#e67e22', width: '50%' }
+    if (/[A-Z]/.test(password) && /[0-9]/.test(password)) return { label: 'Strong', color: '#27ae60', width: '100%' }
+    return { label: 'Good', color: '#3498db', width: '75%' }
+  }
+
+  const strength = passwordStrength()
 
   return (
     <div className={styles.container}>
       <div className={styles.signupCard}>
         <div className={styles.logo}>
           <h1>🚚 500Kcal.fit</h1>
-          <p>Delivery Portal - Sign Up</p>
+          <p>Delivery Partner Registration</p>
         </div>
 
-        {/* Step 1: Phone & Name */}
+        {/* Step 1 — Sign Up Form */}
         {step === 1 && (
-          <form onSubmit={handleSendOTP} className={styles.form}>
+          <form onSubmit={handleSignup} className={styles.form}>
             <h2>Create Account</h2>
 
             {error && <div className={styles.error}>{error}</div>}
 
             <div className={styles.inputGroup}>
-              <label htmlFor="name">Full Name</label>
+              <label>Full Name</label>
               <input
-                id="name"
                 type="text"
-                placeholder="Enter your full name"
+                placeholder="e.g. Arman Khan"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-
-            <div className={styles.inputGroup}>
-              <label htmlFor="phone">Phone Number</label>
-              <input
-                id="phone"
-                type="tel"
-                placeholder="10-digit phone number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                required
-                maxLength={10}
-                disabled={loading}
-              />
-            </div>
-
-            <button type="submit" className={styles.primaryBtn} disabled={loading}>
-              {loading ? 'Sending OTP...' : 'Send OTP'}
-            </button>
-
-            <div id="recaptcha-container"></div>
-
-            <div className={styles.footer}>
-              <p>Already have an account? <a href="/login">Login</a></p>
-            </div>
-          </form>
-        )}
-
-        {/* Step 2: Verify OTP */}
-        {step === 2 && (
-          <form onSubmit={handleVerifyOTP} className={styles.form}>
-            <h2>Verify Phone Number</h2>
-            <p className={styles.subtitle}>Enter the OTP sent to +91{phone}</p>
-
-            {error && <div className={styles.error}>{error}</div>}
-
-            <div className={styles.inputGroup}>
-              <label htmlFor="otp">OTP Code</label>
-              <input
-                id="otp"
-                type="text"
-                placeholder="Enter 6-digit OTP"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                required
-                maxLength={6}
+                onChange={e => setName(e.target.value)}
                 disabled={loading}
                 autoFocus
               />
             </div>
 
-            <button type="submit" className={styles.primaryBtn} disabled={loading}>
-              {loading ? 'Verifying...' : 'Verify OTP'}
-            </button>
+            <div className={styles.inputGroup}>
+              <label>Phone Number</label>
+              <div className={styles.phoneInput}>
+                <span className={styles.countryCode}>+91</span>
+                <input
+                  type="tel"
+                  placeholder="10-digit mobile number"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  maxLength={10}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className={styles.inputGroup}>
+              <label>Password</label>
+              <div className={styles.passwordInput}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  disabled={loading}
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)} className={styles.togglePassword}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {strength && (
+                <>
+                  <div className={styles.strengthBar}>
+                    <div className={styles.strengthFill} style={{ width: strength.width, background: strength.color }} />
+                  </div>
+                  <p className={styles.strengthLabel} style={{ color: strength.color }}>{strength.label}</p>
+                </>
+              )}
+            </div>
+
+            <div className={styles.inputGroup}>
+              <label>Confirm Password</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                disabled={loading}
+              />
+              {confirmPassword && password !== confirmPassword && (
+                <p className={styles.mismatch}>Passwords do not match</p>
+              )}
+            </div>
 
             <button
-              type="button"
-              onClick={() => {
-                setStep(1)
-                setOtp('')
-                setError('')
-              }}
-              className={styles.secondaryBtn}
-              disabled={loading}
+              type="submit"
+              className={styles.primaryBtn}
+              disabled={loading || !name.trim() || phone.length !== 10 || password.length < 6 || password !== confirmPassword}
             >
-              Change Phone Number
+              {loading && <span className={styles.btnSpinner} />}
+              {loading ? 'Creating Account...' : 'Create Account →'}
             </button>
+
+            <p className={styles.footerLink}>
+              Already have an account? <a href="/login">Login</a>
+            </p>
           </form>
         )}
 
-        {/* Step 3: Create Password */}
-        {step === 3 && (
-          <form onSubmit={handleCreateAccount} className={styles.form}>
-            <h2>Create Password</h2>
-            <p className={styles.subtitle}>Set a secure password for your account</p>
+        {/* Step 2 — Welcome */}
+        {step === 2 && (
+          <div className={styles.welcomeCard}>
+            <div className={styles.welcomeIcon}>🎉</div>
+            <h2>Welcome, {name}!</h2>
+            <p className={styles.welcomeText}>Your account is ready. Complete your profile to start delivering.</p>
 
-            {error && <div className={styles.error}>{error}</div>}
-
-            <div className={styles.inputGroup}>
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                disabled={loading}
-                autoFocus
-              />
+            <div className={styles.nextSteps}>
+              <div className={styles.nextStep}>
+                <span className={styles.nextStepNum}>1</span>
+                <div>
+                  <strong>Add your bike details</strong>
+                  <p>Set mileage to track fuel costs</p>
+                </div>
+              </div>
+              <div className={styles.nextStep}>
+                <span className={styles.nextStepNum}>2</span>
+                <div>
+                  <strong>Upload KYC documents</strong>
+                  <p>PAN card and Aadhaar card</p>
+                </div>
+              </div>
+              <div className={styles.nextStep}>
+                <span className={styles.nextStepNum}>3</span>
+                <div>
+                  <strong>Start delivering</strong>
+                  <p>View your assigned orders</p>
+                </div>
+              </div>
             </div>
 
-            <div className={styles.inputGroup}>
-              <label htmlFor="confirmPassword">Confirm Password</label>
-              <input
-                id="confirmPassword"
-                type="password"
-                placeholder="Re-enter password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-                disabled={loading}
-              />
-            </div>
-
-            <button type="submit" className={styles.primaryBtn} disabled={loading}>
-              {loading ? 'Creating Account...' : 'Create Account'}
+            <button onClick={() => router.push('/profile')} className={styles.primaryBtn}>
+              Complete Profile
             </button>
-          </form>
+            <button onClick={() => router.push('/dashboard')} className={styles.skipBtn}>
+              Go to Dashboard →
+            </button>
+          </div>
         )}
       </div>
     </div>

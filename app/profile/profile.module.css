@@ -1,0 +1,436 @@
+.loadingContainer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  gap: 20px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.profilePage {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.header {
+  background: white;
+  padding: 25px 30px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.backBtn:hover {
+  color: #764ba2;
+}
+
+.header h1 {
+  font-size: 28px;
+  margin: 0 0 5px 0;
+  color: #2c3e50;
+}
+
+.header p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 15px;
+}
+
+.messageBanner {
+  padding: 15px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.successBanner {
+  background: #e8f8f5;
+  color: #27ae60;
+  border-left: 4px solid #27ae60;
+}
+
+.errorBanner {
+  background: #fee;
+  color: #c0392b;
+  border-left: 4px solid #c0392b;
+}
+
+.card {
+  background: white;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.cardTitle {
+  font-size: 20px;
+  color: #2c3e50;
+  margin: 0 0 8px 0;
+}
+
+.cardSubtitle {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin: 0 0 25px 0;
+}
+
+/* Documents */
+.documentsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.documentCard {
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.documentHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.documentIcon {
+  font-size: 32px;
+}
+
+.documentHeader h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.uploadedStatus {
+  margin: 0;
+  font-size: 12px;
+  color: #27ae60;
+  font-weight: 600;
+}
+
+.pendingStatus {
+  margin: 0;
+  font-size: 12px;
+  color: #e67e22;
+  font-weight: 600;
+}
+
+.viewDocLink {
+  color: #667eea;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.viewDocLink:hover {
+  text-decoration: underline;
+}
+
+.fileInput {
+  display: none;
+}
+
+.docPreview {
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 150px;
+}
+
+.docPreview img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.uploadDocBtn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.uploadDocBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.uploadDocBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Starting Point */
+.viewOnMapLink {
+  display: inline-block;
+  color: #27ae60;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 18px;
+}
+
+.viewOnMapLink:hover {
+  text-decoration: underline;
+}
+
+.startingPointRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pinBtn {
+  flex-shrink: 0;
+  width: 72px;
+  padding: 10px 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 24px; /* align with input */
+}
+
+.pinBtn span {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: pre;
+  line-height: 1.3;
+  display: block;
+}
+
+.pinBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.pinBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.coordsNote {
+  margin: 0 0 16px 0;
+  font-size: 12px;
+  color: #95a5a6;
+  font-family: monospace;
+}
+
+/* Form */
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.input,
+.select {
+  padding: 12px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  background: white;
+  color: #2c3e50;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: #95a5a6;
+  line-height: 1.4;
+}
+
+.saveBtn {
+  padding: 14px 30px;
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+}
+
+.saveBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Formula Box */
+.formulaBox {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.formulaRow {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 12px;
+}
+
+.formulaRow:last-of-type {
+  margin-bottom: 0;
+}
+
+.formulaLabel {
+  font-weight: 600;
+  color: #2c3e50;
+  min-width: 130px;
+  font-size: 14px;
+}
+
+.formulaEq {
+  color: #7f8c8d;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.formulaValue {
+  color: #667eea;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.formulaDivider {
+  border: none;
+  border-top: 2px dashed #e0e0e0;
+  margin: 20px 0;
+}
+
+.exampleBox {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  border: 2px solid #e0e0e0;
+}
+
+.exampleTitle {
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0 0 15px 0;
+  font-size: 15px;
+}
+
+.exampleCalc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: #555;
+}
+
+.costHighlight {
+  color: #27ae60;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .profilePage {
+    padding: 15px;
+  }
+
+  .documentsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    padding: 20px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .formulaRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .formulaLabel {
+    min-width: unset;
+  }
+}

@@ -2,7 +2,61 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import styles from './dashboard.module.css'
+import { compressImage } from '../../lib/compressImage'
+
+const RouteMap = dynamic(() => import('../components/RouteMap'), { ssr: false })
+
+// Fixed store location
+const STORE_LAT = 18.466912246377394
+const STORE_LNG = 73.87646919594413
+
+// Haversine distance between two GPS points in km
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.asin(Math.sqrt(a))
+}
+
+// Calculate total route distance: store → stop1 → stop2 → ... → last stop
+function calcRouteDistance(deliveryList, fallbackDistPerOrder) {
+  const stops = deliveryList
+    .map(d => ({
+      lat: d.customer?.latitude,
+      lng: d.customer?.longitude,
+    }))
+    .filter(s => s.lat != null && s.lng != null)
+
+  if (stops.length === 0) {
+    // No coords — fall back to estimate
+    return deliveryList.length * (fallbackDistPerOrder || 3)
+  }
+
+  let total = 0
+  let prevLat = STORE_LAT
+  let prevLng = STORE_LNG
+
+  for (const stop of stops) {
+    total += haversineKm(prevLat, prevLng, stop.lat, stop.lng)
+    prevLat = stop.lat
+    prevLng = stop.lng
+  }
+
+  // Add distance back to store
+  total += haversineKm(prevLat, prevLng, STORE_LAT, STORE_LNG)
+
+  // For stops without coords, add fallback per missing stop
+  const missingStops = deliveryList.length - stops.length
+  total += missingStops * (fallbackDistPerOrder || 3)
+
+  return total
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -24,8 +78,14 @@ export default function DashboardPage() {
   const [routeModalOpen, setRouteModalOpen] = useState(false)
   const [selectedOrderForPhoto, setSelectedOrderForPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [photoSizeInfo, setPhotoSizeInfo] = useState(null)
+  const compressedFileRef = useRef(null)
   const [location, setLocation] = useState(null)
   const [locationError, setLocationError] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [routeMapOpen, setRouteMapOpen] = useState(false)
+  const [routeMapDeliveries, setRouteMapDeliveries] = useState([])
+  const [focusedStop, setFocusedStop] = useState(null)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -43,7 +103,20 @@ export default function DashboardPage() {
     setSelectedDate(new Date().toISOString().split('T')[0])
     setLoading(false)
     fetchDeliveries(phone, session)
+    fetchProfile(phone, session)
   }, [router])
+
+  const fetchProfile = async (phone, session) => {
+    try {
+      const res = await fetch(`/api/profile?phone=${phone}&session=${session}`)
+      const data = await res.json()
+      if (data.success) {
+        setProfile(data.profile)
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err)
+    }
+  }
 
   const fetchDeliveries = async (phone, session, date = null) => {
     try {
@@ -143,25 +216,24 @@ export default function DashboardPage() {
     }
   }
 
-  const handlePhotoSelect = (e) => {
+  const handlePhotoSelect = async (e) => {
     const file = e.target.files[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Photo size must be less than 5MB')
-        return
-      }
+    if (!file) return
 
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file')
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result)
-      }
-      reader.readAsDataURL(file)
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
     }
+
+    // Compress before preview and upload (max 1280px, 82% quality)
+    setPhotoSizeInfo({ original: file.size, compressed: null, compressing: true })
+    const compressed = await compressImage(file, { maxDimension: 1280, quality: 0.82 })
+    compressedFileRef.current = compressed
+    setPhotoSizeInfo({ original: file.size, compressed: compressed.size, compressing: false })
+
+    const reader = new FileReader()
+    reader.onloadend = () => setPhotoPreview(reader.result)
+    reader.readAsDataURL(compressed)
   }
 
   const handleUploadAndComplete = async () => {
@@ -170,7 +242,7 @@ export default function DashboardPage() {
       return
     }
 
-    const file = fileInputRef.current?.files[0]
+    const file = compressedFileRef.current || fileInputRef.current?.files[0]
     if (!file) {
       alert('Please select a photo')
       return
@@ -278,8 +350,10 @@ export default function DashboardPage() {
     setPhotoModalOpen(false)
     setSelectedOrderForPhoto(null)
     setPhotoPreview(null)
+    setPhotoSizeInfo(null)
     setLocation(null)
     setLocationError(null)
+    compressedFileRef.current = null
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -385,123 +459,38 @@ export default function DashboardPage() {
     })).filter(group => group.items.length > 0)
   }
 
-  const handlePlanRoute = async () => {
-    // Get pending deliveries (not delivered or cancelled)
-    let pendingDeliveries = deliveries.filter(d =>
+  const handlePlanRoute = () => {
+    // Include all deliveries for selected slot (pending + delivered so they show on map)
+    let slotDeliveries = selectedSlot === 'All'
+      ? deliveries
+      : deliveries.filter(d => (d.meal_slot || '').toLowerCase() === selectedSlot.toLowerCase())
+
+    // At minimum need pending ones
+    const pending = slotDeliveries.filter(d =>
       d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
     )
 
-    // Filter by selected meal slot if not "All" (case-insensitive)
-    if (selectedSlot !== 'All') {
-      pendingDeliveries = pendingDeliveries.filter(d => {
-        const slotName = d.meal_slot ? d.meal_slot.toLowerCase() : ''
-        return slotName === selectedSlot.toLowerCase()
-      })
-    }
-
-    if (pendingDeliveries.length === 0) {
+    if (pending.length === 0) {
       const slotMsg = selectedSlot !== 'All' ? ` for ${selectedSlot}` : ''
-      alert(`No pending deliveries to plan a route for${slotMsg}`)
+      alert(`No pending deliveries to route${slotMsg}`)
       return
     }
 
-    // Extract delivery data with addresses
-    const deliveryData = pendingDeliveries.map(d => ({
-      id: d.id,
-      address: (d.delivery_address || d.customer?.address || '').trim(),
-      customerName: d.customer?.name || 'N/A',
-      lat: null,
-      lng: null
-    })).filter(d => d.address)
+    // Pass pending first so they get lower stop numbers, then already-delivered ones for context
+    const delivered = slotDeliveries.filter(d => d.order_status === 'Delivered')
+    setRouteMapDeliveries([...pending, ...delivered])
+    setFocusedStop(null)
+    setRouteMapOpen(true)
+  }
 
-    if (deliveryData.length === 0) {
-      alert('No addresses found for pending deliveries')
-      return
-    }
-
-    if (deliveryData.length === 1) {
-      // Single destination - just open in Google Maps
-      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(deliveryData[0].address)}`
-      window.open(mapsUrl, '_blank')
-      return
-    }
-
-    try {
-      // Show loading indicator
-      alert('Planning optimal route... This may take a moment.')
-
-      // Get current location as starting point
-      const currentLocation = await new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-          resolve(null)
-          return
-        }
-        navigator.geolocation.getCurrentPosition(
-          (position) => resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          }),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-        )
-      })
-
-      let startLat, startLng
-
-      if (currentLocation) {
-        startLat = currentLocation.lat
-        startLng = currentLocation.lng
-        console.log('Starting from current location:', startLat, startLng)
-      } else {
-        // Default to first delivery if no location
-        console.log('No current location, will use first address')
-      }
-
-      // Use Google Maps Directions API for optimization via URL
-      // The web interface supports waypoint optimization
-      const addresses = deliveryData.map(d => d.address)
-
-      if (currentLocation) {
-        // Build URL with current location as origin and waypoint optimization
-        const origin = `${startLat},${startLng}`
-        const destination = encodeURIComponent(addresses[addresses.length - 1])
-
-        if (addresses.length > 2) {
-          // Add optimize:true to enable waypoint optimization for shortest route
-          const waypoints = 'optimize:true|' + addresses.slice(0, -1).map(addr => encodeURIComponent(addr)).join('|')
-          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
-          window.open(mapsUrl, '_blank')
-        } else {
-          const waypoint = encodeURIComponent(addresses[0])
-          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoint}&travelmode=driving`
-          window.open(mapsUrl, '_blank')
-        }
-      } else {
-        // No current location - create route through all addresses with optimization
-        const origin = encodeURIComponent(addresses[0])
-        const destination = encodeURIComponent(addresses[addresses.length - 1])
-
-        if (addresses.length > 2) {
-          // Add optimize:true to enable waypoint optimization for shortest route
-          const waypoints = 'optimize:true|' + addresses.slice(1, -1).map(addr => encodeURIComponent(addr)).join('|')
-          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`
-          window.open(mapsUrl, '_blank')
-        } else {
-          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`
-          window.open(mapsUrl, '_blank')
-        }
-      }
-
-      console.log('Route planned with', deliveryData.length, 'stops')
-
-    } catch (err) {
-      console.error('Error planning route:', err)
-      // Fallback to simple multi-destination URL
-      const addresses = deliveryData.map(d => d.address)
-      const destinations = addresses.map(addr => encodeURIComponent(addr)).join('/')
-      const mapsUrl = `https://www.google.com/maps/dir/${destinations}`
-      window.open(mapsUrl, '_blank')
-    }
+  const handleViewOnMap = (delivery) => {
+    const lat = delivery.customer?.latitude
+    const lng = delivery.customer?.longitude
+    if (!lat || !lng) return
+    // Show all today's deliveries for context, focused on this one
+    setRouteMapDeliveries(deliveries)
+    setFocusedStop({ lat: parseFloat(lat), lng: parseFloat(lng), name: delivery.customer?.name })
+    setRouteMapOpen(true)
   }
 
   if (loading) {
@@ -522,9 +511,14 @@ export default function DashboardPage() {
             <h1>🚚 Delivery Dashboard</h1>
             <p>Welcome, {deliveryName}!</p>
           </div>
-          <button onClick={handleLogout} className={styles.logoutBtn}>
-            Logout
-          </button>
+          <div className={styles.headerActions}>
+            <button onClick={() => router.push('/profile')} className={styles.profileBtn}>
+              👤 My Profile
+            </button>
+            <button onClick={handleLogout} className={styles.logoutBtn}>
+              Logout
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -627,7 +621,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Plan Route Button */}
+        {/* Plan Route Button + Fuel Cost */}
         {deliveries.filter(d => d.order_status !== 'Delivered' && d.order_status !== 'Cancelled').length > 0 && (
           <div className={styles.routeSection}>
             <button
@@ -639,6 +633,73 @@ export default function DashboardPage() {
             <p className={styles.routeHint}>
               Opens Google Maps with shortest optimized route for {selectedSlot !== 'All' ? `${selectedSlot.toLowerCase()} ` : ''}pending deliveries
             </p>
+
+            {/* Starting point — fixed store */}
+            <div className={styles.startingPointStatus}>
+              <span className={styles.startingPointSet}>
+                🏪 Starting from Store · {STORE_LAT.toFixed(4)}, {STORE_LNG.toFixed(4)}
+              </span>
+            </div>
+
+            {/* Fuel Cost Estimate */}
+            {(() => {
+              const slotDeliveries = deliveries.filter(d =>
+                selectedSlot === 'All' || (d.meal_slot || '').toLowerCase() === selectedSlot.toLowerCase()
+              )
+              const totalCount = slotDeliveries.length
+              const mileage = profile?.bike_mileage || 40
+              const petrolRate = profile?.petrol_rate || 105
+              const fallbackDist = profile?.avg_distance_per_order || 3
+              const totalDist = calcRouteDistance(slotDeliveries, fallbackDist)
+              const fuelLiters = totalDist / mileage
+              const fuelCost = fuelLiters * petrolRate
+              const usingRealCoords = slotDeliveries.some(d => d.customer?.latitude != null)
+
+              return (
+                <div className={styles.fuelCostBox}>
+                  <div className={styles.fuelStats}>
+                    <div className={styles.fuelStat}>
+                      <span className={styles.fuelStatIcon}>📦</span>
+                      <div>
+                        <p className={styles.fuelStatValue}>{totalCount}</p>
+                        <p className={styles.fuelStatLabel}>Total Orders</p>
+                      </div>
+                    </div>
+                    <div className={styles.fuelStat}>
+                      <span className={styles.fuelStatIcon}>📍</span>
+                      <div>
+                        <p className={styles.fuelStatValue}>{totalDist.toFixed(1)} km</p>
+                        <p className={styles.fuelStatLabel}>Est. Distance</p>
+                      </div>
+                    </div>
+                    <div className={styles.fuelStat}>
+                      <span className={styles.fuelStatIcon}>⛽</span>
+                      <div>
+                        <p className={styles.fuelStatValue}>{fuelLiters.toFixed(2)} L</p>
+                        <p className={styles.fuelStatLabel}>Fuel Needed</p>
+                      </div>
+                    </div>
+                    <div className={`${styles.fuelStat} ${styles.fuelCostHighlight}`}>
+                      <span className={styles.fuelStatIcon}>💰</span>
+                      <div>
+                        <p className={styles.fuelStatValue}>₹{fuelCost.toFixed(2)}</p>
+                        <p className={styles.fuelStatLabel}>Fuel Cost</p>
+                      </div>
+                    </div>
+                  </div>
+                  {!profile?.bike_model && (
+                    <p className={styles.fuelSetupHint}>
+                      ⚙️ <button onClick={() => router.push('/profile')} className={styles.setupProfileLink}>Set up your bike profile</button> for accurate fuel cost calculations
+                    </p>
+                  )}
+                  {profile?.bike_model && (
+                    <p className={styles.fuelNote}>
+                      {usingRealCoords ? '📡 Using actual GPS coordinates' : '📐 Estimated distance'} · {profile.bike_model} · {mileage} km/l · ₹{petrolRate}/liter
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -691,6 +752,19 @@ export default function DashboardPage() {
                           <span className={styles.detailLabel}>📍 Address:</span>
                           <span>{delivery.delivery_address || delivery.customer?.address || 'N/A'}</span>
                         </div>
+                        {delivery.customer?.latitude && delivery.customer?.longitude && (
+                          <div className={styles.detailRow}>
+                            <span className={styles.detailLabel}>🌐 Coords:</span>
+                            <button
+                              onClick={() => handleViewOnMap(delivery)}
+                              className={styles.coordBtn}
+                              title="View on map"
+                            >
+                              {Number(delivery.customer.latitude).toFixed(5)}, {Number(delivery.customer.longitude).toFixed(5)}
+                              <span className={styles.coordMapIcon}>🗺️</span>
+                            </button>
+                          </div>
+                        )}
                         {delivery.special_instructions && (
                           <div className={styles.detailRow}>
                             <span className={styles.detailLabel}>📝 Instructions:</span>
@@ -805,8 +879,17 @@ export default function DashboardPage() {
               {!photoPreview ? (
                 <label htmlFor="photoInput" className={styles.uploadLabel}>
                   <div className={styles.uploadPlaceholder}>
-                    <span className={styles.cameraIcon}>📷</span>
-                    <p>Take or Select Photo</p>
+                    {photoSizeInfo?.compressing ? (
+                      <>
+                        <span className={styles.cameraIcon}>⚙️</span>
+                        <p>Compressing photo...</p>
+                      </>
+                    ) : (
+                      <>
+                        <span className={styles.cameraIcon}>📷</span>
+                        <p>Take or Select Photo</p>
+                      </>
+                    )}
                   </div>
                 </label>
               ) : (
@@ -815,12 +898,22 @@ export default function DashboardPage() {
                   <button
                     onClick={() => {
                       setPhotoPreview(null)
+                      setPhotoSizeInfo(null)
+                      compressedFileRef.current = null
                       if (fileInputRef.current) fileInputRef.current.value = ''
                     }}
                     className={styles.removePhotoBtn}
                   >
                     ✕ Remove
                   </button>
+                  {photoSizeInfo?.compressed != null && (
+                    <div className={styles.compressionBadge}>
+                      {(photoSizeInfo.original / 1024 / 1024).toFixed(1)} MB → {(photoSizeInfo.compressed / 1024).toFixed(0)} KB
+                      <span className={styles.compressionSaved}>
+                        {' '}({Math.round((1 - photoSizeInfo.compressed / photoSizeInfo.original) * 100)}% smaller)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -843,6 +936,15 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* In-browser Route Map */}
+      {routeMapOpen && (
+        <RouteMap
+          deliveries={routeMapDeliveries}
+          focusedStop={focusedStop}
+          onClose={() => { setRouteMapOpen(false); setFocusedStop(null) }}
+        />
       )}
     </div>
   )

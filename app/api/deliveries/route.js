@@ -53,7 +53,9 @@ export async function GET(request) {
         customer:customer_accounts!orders_customer_id_fkey(
           name,
           phone_number,
-          address
+          address,
+          latitude,
+          longitude
         ),
         menu_item:recipes(
           name
@@ -86,9 +88,48 @@ export async function GET(request) {
 
     console.log(`Found ${deliveries?.length || 0} orders for delivery boy phone ${deliveryBoy.phone}`)
 
-    // Calculate statistics
+    // Normalize meal_slot values to ensure consistency
+    // This handles lowercase values and time range formats
+    const normalizeMealSlot = (slot) => {
+      if (!slot) return 'Unknown'
+
+      const slotLower = slot.toLowerCase().trim()
+
+      // Handle time ranges - map to meal slots
+      if (slotLower.match(/^0[67]:\d{2}-0[89]:\d{2}$/) || slotLower.match(/^08:\d{2}-0[89]:\d{2}$/)) {
+        // Morning times (06:00-09:30) -> Breakfast
+        return 'Breakfast'
+      } else if (slotLower.match(/^1[12]:\d{2}-1[34]:\d{2}$/)) {
+        // Midday times (11:00-14:30) -> Lunch
+        return 'Lunch'
+      } else if (slotLower.match(/^1[789]:\d{2}-2[01]:\d{2}$/)) {
+        // Evening times (17:00-21:30) -> Dinner
+        return 'Dinner'
+      }
+
+      // Handle text values
+      if (slotLower.includes('breakfast') || slotLower === 'breakfast') {
+        return 'Breakfast'
+      } else if (slotLower.includes('lunch') || slotLower === 'lunch') {
+        return 'Lunch'
+      } else if (slotLower.includes('dinner') || slotLower === 'dinner') {
+        return 'Dinner'
+      }
+
+      return slot // Return original if no match
+    }
+
+    // Apply normalization to all deliveries
+    const normalizedDeliveries = deliveries.map(delivery => ({
+      ...delivery,
+      meal_slot: normalizeMealSlot(delivery.meal_slot)
+    }))
+
+    console.log('Normalized meal slots for', normalizedDeliveries.length, 'orders')
+
+    // Calculate statistics using normalized deliveries
     const today = new Date().toISOString().split('T')[0]
-    const todayDeliveries = deliveries.filter(d => d.delivery_date === today)
+    const todayDeliveries = normalizedDeliveries.filter(d => d.delivery_date === today)
     const completed = todayDeliveries.filter(d => d.order_status === 'Delivered').length
     const pending = todayDeliveries.filter(d =>
       d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
@@ -108,7 +149,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      deliveries: deliveries,
+      deliveries: normalizedDeliveries, // Return normalized deliveries
       stats: {
         todayTotal: todayDeliveries.length,
         todayCompleted: completed,
