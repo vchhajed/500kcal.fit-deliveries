@@ -77,6 +77,38 @@
   box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
+.trackingBadge {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #27ae60;
+  background: #e8f8f0;
+  border: 1px solid #a8e6c4;
+  padding: 2px 8px;
+  border-radius: 20px;
+  vertical-align: middle;
+  animation: trackPulse 2s ease-in-out infinite;
+}
+
+.trackingBadgeOff {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #95a5a6;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 2px 8px;
+  border-radius: 20px;
+  vertical-align: middle;
+}
+
+@keyframes trackPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .logoutBtn {
   padding: 10px 24px;
   background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);

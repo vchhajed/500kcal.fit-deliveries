@@ -86,7 +86,10 @@ export default function DashboardPage() {
   const [routeMapOpen, setRouteMapOpen] = useState(false)
   const [routeMapDeliveries, setRouteMapDeliveries] = useState([])
   const [focusedStop, setFocusedStop] = useState(null)
+  const [liveLocation, setLiveLocation] = useState(null)
   const fileInputRef = useRef(null)
+  const locationWatchRef = useRef(null)
+  const locationIntervalRef = useRef(null)
 
   useEffect(() => {
     // Check authentication
@@ -104,7 +107,55 @@ export default function DashboardPage() {
     setLoading(false)
     fetchDeliveries(phone, session)
     fetchProfile(phone, session)
+    startLocationTracking(phone, session)
+
+    return () => {
+      if (locationWatchRef.current != null) navigator.geolocation?.clearWatch(locationWatchRef.current)
+      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current)
+    }
   }, [router])
+
+  const postLocation = async (phone, session, lat, lng) => {
+    try {
+      await fetch('/api/location/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, session, lat, lng }),
+      })
+    } catch {
+      // silent — don't interrupt the delivery boy's workflow
+    }
+  }
+
+  const startLocationTracking = (phone, session) => {
+    if (!navigator.geolocation) return
+
+    // Watch position continuously
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        setLiveLocation({ lat: latitude, lng: longitude })
+      },
+      null,
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    )
+
+    // Push to server every 30 seconds
+    locationIntervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => postLocation(phone, session, pos.coords.latitude, pos.coords.longitude),
+        null,
+        { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
+      )
+    }, 30000)
+
+    // Send immediately on start
+    navigator.geolocation.getCurrentPosition(
+      (pos) => postLocation(phone, session, pos.coords.latitude, pos.coords.longitude),
+      null,
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+    )
+  }
 
   const fetchProfile = async (phone, session) => {
     try {
@@ -509,7 +560,14 @@ export default function DashboardPage() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <h1>🚚 Delivery Dashboard</h1>
-            <p>Welcome, {deliveryName}!</p>
+            <p>
+              Welcome, {deliveryName}!
+              {liveLocation ? (
+                <span className={styles.trackingBadge}>📡 Location tracking ON</span>
+              ) : (
+                <span className={styles.trackingBadgeOff}>📡 Location off</span>
+              )}
+            </p>
           </div>
           <div className={styles.headerActions}>
             <button onClick={() => router.push('/profile')} className={styles.profileBtn}>
@@ -943,6 +1001,7 @@ export default function DashboardPage() {
         <RouteMap
           deliveries={routeMapDeliveries}
           focusedStop={focusedStop}
+          initialLocation={liveLocation}
           onClose={() => { setRouteMapOpen(false); setFocusedStop(null) }}
         />
       )}

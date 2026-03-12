@@ -6,7 +6,7 @@ import styles from './RouteMap.module.css'
 const STORE_LAT = 18.466912246377394
 const STORE_LNG = 73.87646919594413
 
-export default function RouteMap({ deliveries, focusedStop, onClose }) {
+export default function RouteMap({ deliveries, focusedStop, initialLocation, onClose }) {
   const mapRef = useRef(null)
   const wrapperRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -213,38 +213,41 @@ export default function RouteMap({ deliveries, focusedStop, onClose }) {
       }
 
       // --- Live location (pulsing blue dot) ---
+      // Helper to place/move the live marker
+      const placeLiveMarker = (latitude, longitude, accuracy = 50) => {
+        if (cancelled) return
+        if (!liveMarkerRef.current) {
+          const liveIcon = L.divIcon({
+            html: `<div class="${styles.liveDot}"></div>`,
+            className: '',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+          })
+          liveMarkerRef.current = L.marker([latitude, longitude], { icon: liveIcon, zIndexOffset: 1000 })
+            .bindPopup('📡 Your live location')
+            .addTo(map)
+          liveCircleRef.current = L.circle([latitude, longitude], {
+            radius: accuracy,
+            color: '#3498db',
+            fillColor: '#3498db',
+            fillOpacity: 0.1,
+            weight: 1,
+          }).addTo(map)
+        } else {
+          liveMarkerRef.current.setLatLng([latitude, longitude])
+          liveCircleRef.current.setLatLng([latitude, longitude])
+          liveCircleRef.current.setRadius(accuracy)
+        }
+      }
+
+      // Show already-known location instantly (no GPS wait)
+      if (initialLocation) {
+        placeLiveMarker(initialLocation.lat, initialLocation.lng)
+      }
+
       if (navigator.geolocation) {
         watchIdRef.current = navigator.geolocation.watchPosition(
-          (pos) => {
-            if (cancelled) return
-            const { latitude, longitude } = pos.coords
-
-            if (!liveMarkerRef.current) {
-              // Pulsing dot icon
-              const liveIcon = L.divIcon({
-                html: `<div class="${styles.liveDot}"></div>`,
-                className: '',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
-              })
-              liveMarkerRef.current = L.marker([latitude, longitude], { icon: liveIcon, zIndexOffset: 1000 })
-                .bindPopup('📍 Your live location')
-                .addTo(map)
-
-              // Accuracy circle
-              liveCircleRef.current = L.circle([latitude, longitude], {
-                radius: pos.coords.accuracy,
-                color: '#3498db',
-                fillColor: '#3498db',
-                fillOpacity: 0.1,
-                weight: 1,
-              }).addTo(map)
-            } else {
-              liveMarkerRef.current.setLatLng([latitude, longitude])
-              liveCircleRef.current.setLatLng([latitude, longitude])
-              liveCircleRef.current.setRadius(pos.coords.accuracy)
-            }
-          },
+          (pos) => placeLiveMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
           null,
           { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
         )
