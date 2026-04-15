@@ -12,6 +12,20 @@ const RouteMap = dynamic(() => import('../components/RouteMap'), { ssr: false })
 const STORE_LAT = 18.466912246377394
 const STORE_LNG = 73.87646919594413
 
+// Google Maps URL for navigating to a delivery
+function getGoogleMapsUrl(delivery) {
+  const lat = delivery.customer?.latitude
+  const lng = delivery.customer?.longitude
+  if (lat && lng) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+  }
+  const address = delivery.delivery_address || delivery.customer?.address
+  if (address) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+  }
+  return null
+}
+
 // Haversine distance between two GPS points in km
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371
@@ -868,26 +882,38 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    {delivery.order_status !== 'Delivered' && delivery.order_status !== 'Cancelled' && (
-                      <div className={styles.actionButtons}>
-                        {delivery.order_status !== 'Out for Delivery' && (
-                          <button
-                            onClick={() => handleStatusUpdate(delivery.id, 'Out for Delivery')}
-                            disabled={updating === delivery.id}
-                            className={styles.outForDeliveryBtn}
-                          >
-                            🚚 Out for Delivery
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleStatusUpdate(delivery.id, 'Delivered')}
-                          disabled={updating === delivery.id}
-                          className={styles.deliveredBtn}
+                    <div className={styles.actionButtons}>
+                      {getGoogleMapsUrl(delivery) && (
+                        <a
+                          href={getGoogleMapsUrl(delivery)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.googleMapsBtn}
                         >
-                          ✅ Mark Delivered
-                        </button>
-                      </div>
-                    )}
+                          🗺️ Google Maps
+                        </a>
+                      )}
+                      {delivery.order_status !== 'Delivered' && delivery.order_status !== 'Cancelled' && (
+                        <>
+                          {delivery.order_status !== 'Out for Delivery' && (
+                            <button
+                              onClick={() => handleStatusUpdate(delivery.id, 'Out for Delivery')}
+                              disabled={updating === delivery.id}
+                              className={styles.outForDeliveryBtn}
+                            >
+                              🚚 Out for Delivery
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleStatusUpdate(delivery.id, 'Delivered')}
+                            disabled={updating === delivery.id}
+                            className={styles.deliveredBtn}
+                          >
+                            ✅ Mark Delivered
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                       ))}

@@ -576,6 +576,26 @@
   color: white;
 }
 
+.googleMapsBtn {
+  display: block;
+  text-align: center;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #1a73e8 0%, #0d5bd1 100%);
+  color: white;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  box-shadow: 0 3px 10px rgba(26, 115, 232, 0.3);
+  white-space: nowrap;
+}
+
+.googleMapsBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(26, 115, 232, 0.45);
+}
+
 .actionButtons {
   display: flex;
   flex-direction: column;
