@@ -86,7 +86,49 @@ export async function GET(request) {
       )
     }
 
-    console.log(`Found ${deliveries?.length || 0} orders for delivery boy phone ${deliveryBoy.phone}`)
+    // Also fetch ala carte orders assigned to this delivery boy
+    const { data: acOrders } = await supabase
+      .from('ala_carte_orders')
+      .select('id, order_number, status, total_amount_rs, delivery_address, delivery_latitude, delivery_longitude, created_at, customer_id, ala_carte_order_items(name, quantity, unit_price)')
+      .eq('delivery_boy_phone', deliveryBoy.phone)
+      .in('status', ['Preparing', 'Out for Delivery'])
+
+    // Fetch customer info for ala carte orders
+    const acCustomerIds = [...new Set((acOrders || []).map(o => o.customer_id).filter(Boolean))]
+    const acCustomerMap = {}
+    if (acCustomerIds.length > 0) {
+      const { data: acCustomers } = await supabase
+        .from('customer_accounts')
+        .select('id, name, phone_number, latitude, longitude')
+        .in('id', acCustomerIds)
+      for (const c of (acCustomers || [])) acCustomerMap[c.id] = c
+    }
+
+    // Normalize ala carte orders to match the regular order shape
+    const normalizedAcOrders = (acOrders || []).map(ac => {
+      const customer = acCustomerMap[ac.customer_id] || null
+      const itemNames = (ac.ala_carte_order_items || []).map(i => `${i.name} ×${i.quantity}`).join(', ')
+      return {
+        id: ac.id,
+        order_type: 'ala_carte',
+        order_number: ac.order_number,
+        delivery_date: ac.created_at.split('T')[0],
+        meal_slot: 'Ala Carte',
+        order_status: ac.status,
+        delivery_address: ac.delivery_address,
+        ala_carte_items: ac.ala_carte_order_items || [],
+        total_amount_rs: ac.total_amount_rs,
+        customer: {
+          name: customer?.name || 'Unknown',
+          phone_number: customer?.phone_number || null,
+          latitude: ac.delivery_latitude || customer?.latitude || null,
+          longitude: ac.delivery_longitude || customer?.longitude || null,
+        },
+        menu_item: { name: itemNames || 'Ala Carte Order' },
+      }
+    })
+
+    console.log(`Found ${deliveries?.length || 0} regular + ${normalizedAcOrders.length} ala carte orders for ${deliveryBoy.phone}`)
 
     // Normalize meal_slot values to ensure consistency
     // This handles lowercase values and time range formats
@@ -122,12 +164,16 @@ export async function GET(request) {
     // Apply normalization to all deliveries
     const normalizedDeliveries = deliveries.map(delivery => ({
       ...delivery,
+      order_type: 'regular',
       meal_slot: normalizeMealSlot(delivery.meal_slot)
     }))
 
-    console.log('Normalized meal slots for', normalizedDeliveries.length, 'orders')
+    // Merge regular + ala carte orders
+    const allDeliveries = [...normalizedDeliveries, ...normalizedAcOrders]
 
-    // Calculate statistics using normalized deliveries
+    console.log('Total orders:', allDeliveries.length)
+
+    // Calculate statistics
     const today = new Date().toISOString().split('T')[0]
     const todayDeliveries = normalizedDeliveries.filter(d => d.delivery_date === today)
     const completed = todayDeliveries.filter(d => d.order_status === 'Delivered').length
@@ -149,7 +195,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      deliveries: normalizedDeliveries, // Return normalized deliveries
+      deliveries: allDeliveries,
       stats: {
         todayTotal: todayDeliveries.length,
         todayCompleted: completed,

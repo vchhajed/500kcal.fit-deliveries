@@ -16,6 +16,7 @@ export async function POST(request) {
     const latitude = formData.get('latitude')
     const longitude = formData.get('longitude')
     const accuracy = formData.get('accuracy')
+    const orderType = formData.get('orderType')
 
     if (!phone || !session) {
       return NextResponse.json(
@@ -49,25 +50,37 @@ export async function POST(request) {
 
     const deliveryBoyPhone = deliveryBoy.phone
 
-    // Verify the order is assigned to this delivery boy
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, delivery_boy_phone, order_status')
-      .eq('id', orderId)
-      .single()
+    // For ala carte orders, verify via ala_carte_orders table
+    if (orderType === 'ala_carte') {
+      const { data: acOrder, error: acErr } = await supabase
+        .from('ala_carte_orders').select('id, delivery_boy_phone').eq('id', orderId).single()
+      if (acErr || !acOrder) {
+        return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
+      }
+      if (acOrder.delivery_boy_phone !== deliveryBoyPhone) {
+        return NextResponse.json({ success: false, error: 'Order not assigned to you' }, { status: 403 })
+      }
+    } else {
+      // Verify the order is assigned to this delivery boy (regular orders)
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('id, delivery_boy_phone, order_status')
+        .eq('id', orderId)
+        .single()
 
-    if (orderError || !order) {
-      return NextResponse.json(
-        { success: false, error: 'Order not found' },
-        { status: 404 }
-      )
-    }
+      if (orderError || !order) {
+        return NextResponse.json(
+          { success: false, error: 'Order not found' },
+          { status: 404 }
+        )
+      }
 
-    if (order.delivery_boy_phone !== deliveryBoyPhone) {
-      return NextResponse.json(
-        { success: false, error: 'Order not assigned to you' },
-        { status: 403 }
-      )
+      if (order.delivery_boy_phone !== deliveryBoyPhone) {
+        return NextResponse.json(
+          { success: false, error: 'Order not assigned to you' },
+          { status: 403 }
+        )
+      }
     }
 
     // Upload photo to Supabase Storage
@@ -116,8 +129,9 @@ export async function POST(request) {
       console.log('Saving delivery location:', { latitude, longitude, accuracy })
     }
 
+    const tableName = orderType === 'ala_carte' ? 'ala_carte_orders' : 'orders'
     const { error: updateError } = await supabase
-      .from('orders')
+      .from(tableName)
       .update(updateData)
       .eq('id', orderId)
 

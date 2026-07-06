@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { phone, session, orderId, status, notes } = body
+    const { phone, session, orderId, status, notes, orderType } = body
 
     if (!phone || !session) {
       return NextResponse.json(
@@ -52,7 +52,35 @@ export async function POST(request) {
 
     const deliveryBoyPhone = deliveryBoy.phone
 
-    // Verify the order is assigned to this delivery boy
+    // Handle ala carte orders separately
+    if (orderType === 'ala_carte') {
+      const { data: acOrder, error: acErr } = await supabase
+        .from('ala_carte_orders')
+        .select('id, delivery_boy_phone, status')
+        .eq('id', orderId)
+        .single()
+
+      if (acErr || !acOrder) {
+        return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 })
+      }
+
+      if (acOrder.delivery_boy_phone !== deliveryBoyPhone) {
+        return NextResponse.json({ success: false, error: 'Order not assigned to you' }, { status: 403 })
+      }
+
+      const acUpdate = { status, updated_at: new Date().toISOString() }
+      if (status === 'Delivered') acUpdate.delivered_at = new Date().toISOString()
+      if (status === 'Out for Delivery') acUpdate.dispatched_at = new Date().toISOString()
+
+      const { error: acUpdateErr } = await supabase.from('ala_carte_orders').update(acUpdate).eq('id', orderId)
+      if (acUpdateErr) {
+        return NextResponse.json({ success: false, error: 'Failed to update order status' }, { status: 500 })
+      }
+
+      return NextResponse.json({ success: true, message: `Order marked as ${status}` })
+    }
+
+    // Regular order flow
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('id, delivery_boy_phone, order_status')
