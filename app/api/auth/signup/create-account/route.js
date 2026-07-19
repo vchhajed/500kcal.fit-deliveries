@@ -50,19 +50,15 @@ export async function POST(request) {
       )
     }
 
-    const salt = crypto.randomBytes(16).toString('hex')
-    const passwordHash = hashPassword(password, salt)
     const sessionToken = crypto.randomBytes(32).toString('hex')
 
-    // Insert into delivery_boys — the table used by login + all delivery APIs
+    // Insert into delivery_boys — the table uses a plain `password` column
     const { data: newBoy, error: insertError } = await supabase
       .from('delivery_boys')
       .insert({
         name,
         phone,
-        password_hash: passwordHash,
-        password_salt: salt,
-        session_token: sessionToken,
+        password,
       })
       .select('id, name, phone')
       .single()
