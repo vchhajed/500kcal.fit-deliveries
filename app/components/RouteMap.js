@@ -78,13 +78,14 @@ export default function RouteMap({ deliveries, focusedStop, initialLocation, onC
         .addTo(map)
 
       // --- Collect stops with coordinates ---
+      // Prefer order-level coords (V2 address) over stale customer_accounts coords
       const stops = deliveries
-        .filter(d => d.customer?.latitude != null && d.customer?.longitude != null)
+        .filter(d => (d.delivery_latitude ?? d.customer?.latitude) != null && (d.delivery_longitude ?? d.customer?.longitude) != null)
         .map(d => ({
-          lat: parseFloat(d.customer.latitude),
-          lng: parseFloat(d.customer.longitude),
-          name: d.customer.name || 'Customer',
-          address: d.delivery_address || d.customer.address || '',
+          lat: parseFloat(d.delivery_latitude ?? d.customer.latitude),
+          lng: parseFloat(d.delivery_longitude ?? d.customer.longitude),
+          name: d.customer?.name || 'Customer',
+          address: d.delivery_address || d.customer?.address || '',
           slot: d.meal_slot || '',
           status: d.order_status,
         }))

@@ -13,9 +13,11 @@ const STORE_LAT = 18.466912246377394
 const STORE_LNG = 73.87646919594413
 
 // Google Maps URL for navigating to a delivery
+// Prefer order-level coords (set at booking from customer_addresses V2) over
+// stale customer_accounts coords.
 function getGoogleMapsUrl(delivery) {
-  const lat = delivery.customer?.latitude
-  const lng = delivery.customer?.longitude
+  const lat = delivery.delivery_latitude ?? delivery.customer?.latitude
+  const lng = delivery.delivery_longitude ?? delivery.customer?.longitude
   if (lat && lng) {
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
@@ -42,8 +44,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 function calcRouteDistance(deliveryList, fallbackDistPerOrder) {
   const stops = deliveryList
     .map(d => ({
-      lat: d.customer?.latitude,
-      lng: d.customer?.longitude,
+      lat: d.delivery_latitude ?? d.customer?.latitude,
+      lng: d.delivery_longitude ?? d.customer?.longitude,
     }))
     .filter(s => s.lat != null && s.lng != null)
 
@@ -549,8 +551,8 @@ export default function DashboardPage() {
   }
 
   const handleViewOnMap = (delivery) => {
-    const lat = delivery.customer?.latitude
-    const lng = delivery.customer?.longitude
+    const lat = delivery.delivery_latitude ?? delivery.customer?.latitude
+    const lng = delivery.delivery_longitude ?? delivery.customer?.longitude
     if (!lat || !lng) return
     // Show all today's deliveries for context, focused on this one
     setRouteMapDeliveries(deliveries)
@@ -725,7 +727,7 @@ export default function DashboardPage() {
               const totalDist = calcRouteDistance(slotDeliveries, fallbackDist)
               const fuelLiters = totalDist / mileage
               const fuelCost = fuelLiters * petrolRate
-              const usingRealCoords = slotDeliveries.some(d => d.customer?.latitude != null)
+              const usingRealCoords = slotDeliveries.some(d => (d.delivery_latitude ?? d.customer?.latitude) != null)
 
               return (
                 <div className={styles.fuelCostBox}>
@@ -824,7 +826,7 @@ export default function DashboardPage() {
                           <span className={styles.detailLabel}>📍 Address:</span>
                           <span>{delivery.delivery_address || delivery.customer?.address || 'N/A'}</span>
                         </div>
-                        {delivery.customer?.latitude && delivery.customer?.longitude && (
+                        {(delivery.delivery_latitude ?? delivery.customer?.latitude) && (delivery.delivery_longitude ?? delivery.customer?.longitude) && (
                           <div className={styles.detailRow}>
                             <span className={styles.detailLabel}>🌐 Coords:</span>
                             <button
@@ -832,7 +834,7 @@ export default function DashboardPage() {
                               className={styles.coordBtn}
                               title="View on map"
                             >
-                              {Number(delivery.customer.latitude).toFixed(5)}, {Number(delivery.customer.longitude).toFixed(5)}
+                              {Number(delivery.delivery_latitude ?? delivery.customer?.latitude).toFixed(5)}, {Number(delivery.delivery_longitude ?? delivery.customer?.longitude).toFixed(5)}
                               <span className={styles.coordMapIcon}>🗺️</span>
                             </button>
                           </div>
