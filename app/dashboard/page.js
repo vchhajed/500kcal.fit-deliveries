@@ -234,9 +234,12 @@ export default function DashboardPage() {
   }
 
   const handleStatusUpdate = async (orderId, newStatus) => {
+    const delivery = deliveries.find(d => d.id === orderId)
+    const orderType = delivery?.order_type || 'regular'
+
     // If marking as delivered, require photo upload
     if (newStatus === 'Delivered') {
-      setSelectedOrderForPhoto(orderId)
+      setSelectedOrderForPhoto({ orderId, orderType })
       setPhotoModalOpen(true)
       return
     }
@@ -262,6 +265,7 @@ export default function DashboardPage() {
           session,
           orderId,
           status: newStatus,
+          orderType,
         }),
       })
 
@@ -315,8 +319,11 @@ export default function DashboardPage() {
       return
     }
 
+    const currentOrderId = selectedOrderForPhoto?.orderId || selectedOrderForPhoto
+    const currentOrderType = selectedOrderForPhoto?.orderType || 'regular'
+
     try {
-      setUploadingPhoto(selectedOrderForPhoto)
+      setUploadingPhoto(currentOrderId)
 
       const phone = localStorage.getItem('deliveryPhone')
       const session = localStorage.getItem('deliverySession')
@@ -358,8 +365,9 @@ export default function DashboardPage() {
       const formData = new FormData()
       formData.append('phone', phone)
       formData.append('session', session)
-      formData.append('orderId', selectedOrderForPhoto)
+      formData.append('orderId', currentOrderId)
       formData.append('photo', file)
+      formData.append('orderType', currentOrderType)
 
       // Add location data if available
       if (currentLocation) {
@@ -391,8 +399,9 @@ export default function DashboardPage() {
         body: JSON.stringify({
           phone,
           session,
-          orderId: selectedOrderForPhoto,
+          orderId: currentOrderId,
           status: 'Delivered',
+          orderType: currentOrderType,
         }),
       })
 
@@ -786,6 +795,53 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
+              {/* Ala Carte Orders — always shown at top when selectedSlot is All */}
+              {selectedSlot === 'All' && deliveries.filter(d => d.order_type === 'ala_carte').length > 0 && (
+                <div className={styles.slotSection}>
+                  <h3 className={styles.slotHeader}>🍽️ Ala Carte</h3>
+                  <div className={styles.deliveriesList}>
+                    {deliveries.filter(d => d.order_type === 'ala_carte').map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className={styles.deliveryCard}
+                  style={{ borderLeftColor: getStatusColor(delivery.order_status) }}
+                >
+                  <div className={styles.deliveryContent}>
+                    <div className={styles.deliveryMain}>
+                      <div className={styles.customerInfo}>
+                        <h3>{delivery.customer?.name || 'N/A'}</h3>
+                        <p className={styles.phone}>📞 {delivery.customer?.phone_number || 'N/A'}</p>
+                      </div>
+                      <div className={styles.deliveryDetails}>
+                        <div className={styles.detailRow}><span className={styles.detailLabel}>🧾 Order:</span><span>{delivery.order_number}</span></div>
+                        <div className={styles.detailRow}><span className={styles.detailLabel}>🍽️ Items:</span><span>{delivery.menu_item?.name || 'N/A'}</span></div>
+                        {delivery.total_amount_rs && <div className={styles.detailRow}><span className={styles.detailLabel}>💰 Total:</span><span>₹{delivery.total_amount_rs}</span></div>}
+                        <div className={styles.detailRow}><span className={styles.detailLabel}>📍 Address:</span><span>{delivery.delivery_address || 'N/A'}</span></div>
+                      </div>
+                      <div className={styles.statusBadge}>
+                        <span style={{ backgroundColor: getStatusColor(delivery.order_status) }}>{delivery.order_status}</span>
+                      </div>
+                    </div>
+                    <div className={styles.actionButtons}>
+                      {delivery.customer?.latitude && delivery.customer?.longitude && (
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${delivery.customer.latitude},${delivery.customer.longitude}`} target="_blank" rel="noopener noreferrer" className={styles.googleMapsBtn}>🗺️ Google Maps</a>
+                      )}
+                      {delivery.order_status !== 'Delivered' && delivery.order_status !== 'Cancelled' && (
+                        <>
+                          {delivery.order_status !== 'Out for Delivery' && (
+                            <button onClick={() => handleStatusUpdate(delivery.id, 'Out for Delivery')} disabled={updating === delivery.id} className={styles.outForDeliveryBtn}>🚚 Out for Delivery</button>
+                          )}
+                          <button onClick={() => handleStatusUpdate(delivery.id, 'Delivered')} disabled={updating === delivery.id} className={styles.deliveredBtn}>✅ Mark Delivered</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {groupBySlot().map((slotGroup) => (
                 <div key={slotGroup.name} className={styles.slotSection}>
                   <h3 className={styles.slotHeader}>{slotGroup.emoji} {slotGroup.name}</h3>
