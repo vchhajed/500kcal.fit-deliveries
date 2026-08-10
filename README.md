@@ -4,7 +4,7 @@ A standalone delivery management portal for 500Kcal.fit delivery personnel.
 
 ## Features
 
-- Secure login for delivery personnel only
+- Secure login for delivery personnel only.
 - Real-time delivery list with customer details
 - Status tracking (Out for Delivery, Delivered)
 - Daily and monthly statistics dashboard
