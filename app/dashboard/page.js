@@ -16,12 +16,12 @@ const STORE_LNG = 73.87646919594413
 // Prefer order-level coords (set at booking from customer_addresses V2) over
 // stale customer_accounts coords.
 function getGoogleMapsUrl(delivery) {
-  const lat = delivery.delivery_latitude ?? delivery.customer?.latitude
-  const lng = delivery.delivery_longitude ?? delivery.customer?.longitude
+  const lat = delivery.delivery_latitude
+  const lng = delivery.delivery_longitude
   if (lat && lng) {
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
-  const address = delivery.delivery_address || delivery.customer?.address
+  const address = delivery.delivery_address
   if (address) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
   }
@@ -44,8 +44,8 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 function calcRouteDistance(deliveryList, fallbackDistPerOrder) {
   const stops = deliveryList
     .map(d => ({
-      lat: d.delivery_latitude ?? d.customer?.latitude,
-      lng: d.delivery_longitude ?? d.customer?.longitude,
+      lat: d.delivery_latitude,
+      lng: d.delivery_longitude,
     }))
     .filter(s => s.lat != null && s.lng != null)
 
@@ -519,7 +519,7 @@ export default function DashboardPage() {
       ...slot,
       items: deliveries.filter(d => {
         // Case-insensitive comparison
-        const slotName = d.meal_slot ? d.meal_slot.toLowerCase() : ''
+        const slotName = d.meal_type ? d.meal_type.toLowerCase() : ''
         const filterName = slot.name.toLowerCase()
         return slotName === filterName
       })
@@ -530,11 +530,11 @@ export default function DashboardPage() {
     // Include all deliveries for selected slot (pending + delivered so they show on map)
     let slotDeliveries = selectedSlot === 'All'
       ? deliveries
-      : deliveries.filter(d => (d.meal_slot || '').toLowerCase() === selectedSlot.toLowerCase())
+      : deliveries.filter(d => (d.meal_type || '').toLowerCase() === selectedSlot.toLowerCase())
 
     // At minimum need pending ones
     const pending = slotDeliveries.filter(d =>
-      d.order_status !== 'Delivered' && d.order_status !== 'Cancelled'
+      d.status !== 'Delivered' && d.status !== 'Cancelled'
     )
 
     if (pending.length === 0) {
@@ -544,19 +544,19 @@ export default function DashboardPage() {
     }
 
     // Pass pending first so they get lower stop numbers, then already-delivered ones for context
-    const delivered = slotDeliveries.filter(d => d.order_status === 'Delivered')
+    const delivered = slotDeliveries.filter(d => d.status === 'Delivered')
     setRouteMapDeliveries([...pending, ...delivered])
     setFocusedStop(null)
     setRouteMapOpen(true)
   }
 
   const handleViewOnMap = (delivery) => {
-    const lat = delivery.delivery_latitude ?? delivery.customer?.latitude
-    const lng = delivery.delivery_longitude ?? delivery.customer?.longitude
+    const lat = delivery.delivery_latitude
+    const lng = delivery.delivery_longitude
     if (!lat || !lng) return
     // Show all today's deliveries for context, focused on this one
     setRouteMapDeliveries(deliveries)
-    setFocusedStop({ lat: parseFloat(lat), lng: parseFloat(lng), name: delivery.customer?.name })
+    setFocusedStop({ lat: parseFloat(lat), lng: parseFloat(lng), name: delivery.customer_name })
     setRouteMapOpen(true)
   }
 
@@ -696,7 +696,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Plan Route Button + Fuel Cost */}
-        {deliveries.filter(d => d.order_status !== 'Delivered' && d.order_status !== 'Cancelled').length > 0 && (
+        {deliveries.filter(d => d.status !== 'Delivered' && d.status !== 'Cancelled').length > 0 && (
           <div className={styles.routeSection}>
             <button
               onClick={handlePlanRoute}
@@ -718,7 +718,7 @@ export default function DashboardPage() {
             {/* Fuel Cost Estimate */}
             {(() => {
               const slotDeliveries = deliveries.filter(d =>
-                selectedSlot === 'All' || (d.meal_slot || '').toLowerCase() === selectedSlot.toLowerCase()
+                selectedSlot === 'All' || (d.meal_type || '').toLowerCase() === selectedSlot.toLowerCase()
               )
               const totalCount = slotDeliveries.length
               const mileage = profile?.bike_mileage || 40
@@ -727,7 +727,7 @@ export default function DashboardPage() {
               const totalDist = calcRouteDistance(slotDeliveries, fallbackDist)
               const fuelLiters = totalDist / mileage
               const fuelCost = fuelLiters * petrolRate
-              const usingRealCoords = slotDeliveries.some(d => (d.delivery_latitude ?? d.customer?.latitude) != null)
+              const usingRealCoords = slotDeliveries.some(d => d.delivery_latitude != null)
 
               return (
                 <div className={styles.fuelCostBox}>
@@ -792,19 +792,19 @@ export default function DashboardPage() {
                   <div className={styles.deliveriesList}>
                     {slotGroup.items.map((delivery) => (
                 <div
-                  key={delivery.id}
+                  key={delivery.slot_id}
                   className={styles.deliveryCard}
                   style={{
-                    borderLeftColor: getStatusColor(delivery.order_status)
+                    borderLeftColor: getStatusColor(delivery.status)
                   }}
                 >
                   <div className={styles.deliveryContent}>
                     <div className={styles.deliveryMain}>
                       {/* Customer Info */}
                       <div className={styles.customerInfo}>
-                        <h3>{delivery.customer?.name || 'N/A'}</h3>
+                        <h3>{delivery.customer_name || 'N/A'}</h3>
                         <p className={styles.phone}>
-                          📞 {delivery.customer?.phone_number || 'N/A'}
+                          📞 {delivery.customer_phone || 'N/A'}
                         </p>
                       </div>
 
@@ -816,17 +816,13 @@ export default function DashboardPage() {
                         </div>
                         <div className={styles.detailRow}>
                           <span className={styles.detailLabel}>🕐 Slot:</span>
-                          <span>{delivery.meal_slot}</span>
-                        </div>
-                        <div className={styles.detailRow}>
-                          <span className={styles.detailLabel}>🍽️ Item:</span>
-                          <span>{delivery.menu_item?.name || 'N/A'}</span>
+                          <span>{delivery.meal_type}</span>
                         </div>
                         <div className={styles.detailRow}>
                           <span className={styles.detailLabel}>📍 Address:</span>
-                          <span>{delivery.delivery_address || delivery.customer?.address || 'N/A'}</span>
+                          <span>{delivery.delivery_address || 'N/A'}</span>
                         </div>
-                        {(delivery.delivery_latitude ?? delivery.customer?.latitude) && (delivery.delivery_longitude ?? delivery.customer?.longitude) && (
+                        {delivery.delivery_latitude && delivery.delivery_longitude && (
                           <div className={styles.detailRow}>
                             <span className={styles.detailLabel}>🌐 Coords:</span>
                             <button
@@ -834,7 +830,7 @@ export default function DashboardPage() {
                               className={styles.coordBtn}
                               title="View on map"
                             >
-                              {Number(delivery.delivery_latitude ?? delivery.customer?.latitude).toFixed(5)}, {Number(delivery.delivery_longitude ?? delivery.customer?.longitude).toFixed(5)}
+                              {Number(delivery.delivery_latitude).toFixed(5)}, {Number(delivery.delivery_longitude).toFixed(5)}
                               <span className={styles.coordMapIcon}>🗺️</span>
                             </button>
                           </div>
@@ -875,10 +871,10 @@ export default function DashboardPage() {
                       <div className={styles.statusBadge}>
                         <span
                           style={{
-                            backgroundColor: getStatusColor(delivery.order_status)
+                            backgroundColor: getStatusColor(delivery.status)
                           }}
                         >
-                          {delivery.order_status}
+                          {delivery.status}
                         </span>
                       </div>
                     </div>
@@ -895,20 +891,20 @@ export default function DashboardPage() {
                           🗺️ Google Maps
                         </a>
                       )}
-                      {delivery.order_status !== 'Delivered' && delivery.order_status !== 'Cancelled' && (
+                      {delivery.status !== 'Delivered' && delivery.status !== 'Cancelled' && (
                         <>
-                          {delivery.order_status !== 'Out for Delivery' && (
+                          {delivery.status !== 'Out for Delivery' && (
                             <button
-                              onClick={() => handleStatusUpdate(delivery.id, 'Out for Delivery')}
-                              disabled={updating === delivery.id}
+                              onClick={() => handleStatusUpdate(delivery.slot_id, 'Out for Delivery')}
+                              disabled={updating === delivery.slot_id}
                               className={styles.outForDeliveryBtn}
                             >
                               🚚 Out for Delivery
                             </button>
                           )}
                           <button
-                            onClick={() => handleStatusUpdate(delivery.id, 'Delivered')}
-                            disabled={updating === delivery.id}
+                            onClick={() => handleStatusUpdate(delivery.slot_id, 'Delivered')}
+                            disabled={updating === delivery.slot_id}
                             className={styles.deliveredBtn}
                           >
                             ✅ Mark Delivered
