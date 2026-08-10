@@ -34,6 +34,14 @@ export async function POST(request) {
       )
     }
 
+    // Map display status → DB status (meal_booking_slots uses lowercase)
+    const DB_STATUS = {
+      'Delivered': 'delivered',
+      'Out for Delivery': 'out_for_delivery',
+      'Cancelled': 'cancelled',
+    }
+    const dbStatus = DB_STATUS[status] || status.toLowerCase()
+
     // Verify session from database using delivery_boys
     const { data: deliveryBoy, error: authError } = await supabase
       .from('delivery_boys')
@@ -48,65 +56,72 @@ export async function POST(request) {
       )
     }
 
-    // Session validation is skipped since session_token column doesn't exist
-
     const deliveryBoyPhone = deliveryBoy.phone
 
-    // Verify the order is assigned to this delivery boy
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, delivery_boy_phone, order_status')
+    // NEW: Verify the slot is assigned to this delivery boy
+    const { data: slot, error: slotError } = await supabase
+      .from('meal_booking_slots')
+      .select('id, delivery_boy_phone, status')
       .eq('id', orderId)
       .single()
 
-    if (orderError || !order) {
+    if (slotError || !slot) {
       return NextResponse.json(
-        { success: false, error: 'Order not found' },
+        { success: false, error: 'Slot not found' },
         { status: 404 }
       )
     }
 
-    if (order.delivery_boy_phone !== deliveryBoyPhone) {
+    if (slot.delivery_boy_phone !== deliveryBoyPhone) {
       return NextResponse.json(
-        { success: false, error: 'Order not assigned to you' },
+        { success: false, error: 'Slot not assigned to you' },
         { status: 403 }
       )
     }
 
-    // Prepare update data
+    // FALLBACK: old orders verify
+    // const { data: order, error: orderError } = await supabase
+    //   .from('orders')
+    //   .select('id, delivery_boy_phone, order_status')
+    //   .eq('id', orderId)
+    //   .single()
+
+    // NEW: Update meal_booking_slots
     const updateData = {
-      order_status: status,
+      status: dbStatus,
       updated_at: new Date().toISOString()
     }
 
-    if (notes) {
-      updateData.delivery_notes = notes
-    }
-
-    if (status === 'Delivered') {
+    if (dbStatus === 'delivered') {
       updateData.delivered_at = new Date().toISOString()
     }
 
-    // Update the order
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('orders')
+    const { data: updatedSlot, error: updateError } = await supabase
+      .from('meal_booking_slots')
       .update(updateData)
       .eq('id', orderId)
       .select()
       .single()
 
+    // FALLBACK: old orders update
+    // const updateDataOld = { order_status: status, updated_at: new Date().toISOString() }
+    // if (notes) updateDataOld.delivery_notes = notes
+    // if (status === 'Delivered') updateDataOld.delivered_at = new Date().toISOString()
+    // const { data: updatedOrder, error: updateError } = await supabase
+    //   .from('orders').update(updateDataOld).eq('id', orderId).select().single()
+
     if (updateError) {
-      console.error('Error updating order:', updateError)
+      console.error('Error updating slot:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update order status' },
+        { success: false, error: 'Failed to update status' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      message: `Order marked as ${status}`,
-      order: updatedOrder
+      message: `Slot marked as ${status}`,
+      slot: updatedSlot
     })
 
   } catch (error) {

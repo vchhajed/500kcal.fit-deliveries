@@ -49,26 +49,32 @@ export async function POST(request) {
 
     const deliveryBoyPhone = deliveryBoy.phone
 
-    // Verify the order is assigned to this delivery boy
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('id, delivery_boy_phone, order_status')
+    // NEW: Verify the slot is assigned to this delivery boy
+    const { data: slot, error: slotError } = await supabase
+      .from('meal_booking_slots')
+      .select('id, delivery_boy_phone, status')
       .eq('id', orderId)
       .single()
 
-    if (orderError || !order) {
+    if (slotError || !slot) {
       return NextResponse.json(
-        { success: false, error: 'Order not found' },
+        { success: false, error: 'Slot not found' },
         { status: 404 }
       )
     }
 
-    if (order.delivery_boy_phone !== deliveryBoyPhone) {
+    if (slot.delivery_boy_phone !== deliveryBoyPhone) {
       return NextResponse.json(
-        { success: false, error: 'Order not assigned to you' },
+        { success: false, error: 'Slot not assigned to you' },
         { status: 403 }
       )
     }
+
+    // FALLBACK: old orders ownership check
+    // const { data: order, error: orderError } = await supabase
+    //   .from('orders').select('id, delivery_boy_phone, order_status').eq('id', orderId).single()
+    // if (orderError || !order) { ... }
+    // if (order.delivery_boy_phone !== deliveryBoyPhone) { ... }
 
     // Upload photo to Supabase Storage
     const fileExt = photo.name.split('.').pop()
@@ -116,15 +122,20 @@ export async function POST(request) {
       console.log('Saving delivery location:', { latitude, longitude, accuracy })
     }
 
+    // NEW: Write delivery_photo_url to meal_booking_slots
     const { error: updateError } = await supabase
-      .from('orders')
+      .from('meal_booking_slots')
       .update(updateData)
       .eq('id', orderId)
 
+    // FALLBACK: old orders update
+    // const { error: updateError } = await supabase
+    //   .from('orders').update(updateData).eq('id', orderId)
+
     if (updateError) {
-      console.error('Error updating order:', updateError)
+      console.error('Error updating slot:', updateError)
       return NextResponse.json(
-        { success: false, error: 'Failed to update order with photo' },
+        { success: false, error: 'Failed to update slot with photo' },
         { status: 500 }
       )
     }
