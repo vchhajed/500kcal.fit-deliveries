@@ -63,11 +63,16 @@ export async function GET(request) {
         status,
         credits,
         delivery_address,
+        delivery_latitude,
+        delivery_longitude,
         delivery_boy_phone,
         delivery_photo_url,
         meal_bookings!inner(
           delivery_date,
           booking_number,
+          delivery_address,
+          delivery_latitude,
+          delivery_longitude,
           customer_accounts!inner(
             name,
             phone_number,
@@ -124,14 +129,16 @@ export async function GET(request) {
       meal_type: normalizeMealType(slot.meal_type),                  // replaces meal_slot
       status: normalizeStatus(slot.status),                          // replaces order_status
       credits: slot.credits,
-      delivery_address: slot.delivery_address,
+      // The slot's own address/pin is the one picked for this meal; the booking's belongs to the
+      // first meal booked that day. Never the account-level pin — it can sit km away.
+      delivery_address: slot.delivery_address || slot.meal_bookings?.delivery_address || null,
       delivery_photo_url: slot.delivery_photo_url,
       delivery_date: slot.meal_bookings?.delivery_date,
       booking_number: slot.meal_bookings?.booking_number,
       customer_name: slot.meal_bookings?.customer_accounts?.name,
       customer_phone: slot.meal_bookings?.customer_accounts?.phone_number,
-      delivery_latitude: slot.meal_bookings?.customer_accounts?.latitude ?? null,
-      delivery_longitude: slot.meal_bookings?.customer_accounts?.longitude ?? null,
+      delivery_latitude: slot.delivery_latitude ?? slot.meal_bookings?.delivery_latitude ?? null,
+      delivery_longitude: slot.delivery_longitude ?? slot.meal_bookings?.delivery_longitude ?? null,
     }))
 
     // Stats
