@@ -63,11 +63,15 @@ export async function GET(request) {
         status,
         credits,
         delivery_address,
+        delivery_latitude,
+        delivery_longitude,
         delivery_boy_phone,
         delivery_photo_url,
         meal_bookings!inner(
           delivery_date,
           booking_number,
+          delivery_latitude,
+          delivery_longitude,
           customer_accounts!inner(
             name,
             phone_number,
@@ -116,6 +120,18 @@ export async function GET(request) {
       return type
     }
 
+    const pin = (slot) => {
+      const sources = [slot, slot.meal_bookings, slot.meal_bookings?.customer_accounts]
+      for (const src of sources) {
+        const lat = src?.delivery_latitude ?? src?.latitude
+        const lng = src?.delivery_longitude ?? src?.longitude
+        if (lat != null && lng != null) {
+          return { delivery_latitude: Number(lat), delivery_longitude: Number(lng) }
+        }
+      }
+      return { delivery_latitude: null, delivery_longitude: null }
+    }
+
     // Map to flat response shape
     const deliveries = (slots || []).map(slot => ({
       slot_id: slot.id,
@@ -130,8 +146,9 @@ export async function GET(request) {
       booking_number: slot.meal_bookings?.booking_number,
       customer_name: slot.meal_bookings?.customer_accounts?.name,
       customer_phone: slot.meal_bookings?.customer_accounts?.phone_number,
-      delivery_latitude: slot.meal_bookings?.customer_accounts?.latitude ?? null,
-      delivery_longitude: slot.meal_bookings?.customer_accounts?.longitude ?? null,
+      // Where this order goes: the slot's own pin (set at booking, e.g. office
+      // for lunch), then the booking's, then the customer's profile as a last resort
+      ...pin(slot),
     }))
 
     // Stats
